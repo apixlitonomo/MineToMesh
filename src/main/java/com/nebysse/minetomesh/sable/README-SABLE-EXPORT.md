@@ -146,6 +146,6 @@ How to read them:
 
 ## Attribution
 
-This is the region-export core of the **火控之眼 (Fire Control Eye)** mod's field implementation
+This is the region-export core of the **Fire Control Eye** (Chinese name: Huǒkòng Zhī Yǎn) mod's field implementation
 (`/sableexport region <name>`), rewritten for this project: the same double-precision frame, the
 same Flywheel gate, the same plot-space walk. Author: QKDream.

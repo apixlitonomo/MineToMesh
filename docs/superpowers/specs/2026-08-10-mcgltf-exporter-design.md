@@ -1,121 +1,121 @@
-# MC glTF Exporter 设计规格
+# MC glTF Exporter Design Specification
 
-- 状态：已批准
-- 日期：2026-08-10
-- 目标版本：Minecraft 1.21.1
-- 模组平台：NeoForge 21.1.244 及后续兼容的 21.1.x
-- Java：21
-- Mod ID：`mcgltf`
-- 显示名称：`MC glTF Exporter`
-- Java 包：`com.onecuber.mcgltf`
-- 运行环境：仅物理客户端
+- Status: approved
+- Date: 2026-08-10
+- Target version: Minecraft 1.21.1
+- Mod platform: NeoForge 21.1.244 and later compatible 21.1.x
+- Java: 21
+- Mod ID: `mcgltf`
+- Display name: `MC glTF Exporter`
+- Java package: `com.onecuber.mcgltf`
+- Runtime environment: physical client only
 
-## 1. 目标
+## 1. Goals
 
-制作一个 NeoForge 1.21.1 客户端模组，使玩家能够在游戏内通过两点选区指令，将当前客户端已加载的地图区域导出为 glTF 2.0 场景。
+Build a NeoForge 1.21.1 client mod that lets players export the map region currently loaded on the client as a glTF 2.0 scene, through an in-game two-point selection command.
 
-导出内容包括：
+The exported content includes:
 
-- 原版及其他模组的普通方块模型
-- 原版及其他模组的流体
-- 原版及其他模组的方块实体渲染内容
-- 选区内普通实体的当前静态姿态
-- 方块、流体、方块实体和实体实际使用的纹理
-- 独立 glTF 材质及对应的独立 Minecraft 材质描述 JSON
-- 缺失区块、兼容性降级和失败对象的结构化报告
+- Ordinary block models of vanilla and other mods
+- Fluids of vanilla and other mods
+- Block-entity rendered content of vanilla and other mods
+- The current static pose of ordinary entities inside the selection
+- The textures actually used by blocks, fluids, block entities and entities
+- Standalone glTF materials and the matching standalone Minecraft material description JSON
+- A structured report of missing chunks, compatibility degradations and failed objects
 
-导出结果以 Blender 编辑与渲染为首要使用场景。
+Editing and rendering in Blender is the primary usage scenario of the output.
 
-## 2. 已确认的产品约束
+## 2. Confirmed product constraints
 
-### 2.1 选区方式
+### 2.1 Selection method
 
-采用 WorldEdit 式两点选区：
+A WorldEdit-style two-point selection is used:
 
 ```text
 /mcgltf pos1
 /mcgltf pos2
-/mcgltf export <名称>
+/mcgltf export <name>
 ```
 
-`pos1` 和 `pos2` 取玩家执行指令时所在的方块坐标。两个点共同定义包含边界的整数方块闭区间。
+`pos1` and `pos2` take the block coordinates the player stands on when running the command. The two points together define an inclusive closed integer block interval.
 
-### 2.2 运行侧
+### 2.2 Runtime side
 
-模组仅在物理客户端加载。导出读取客户端实际启用的模组、资源包、烘焙模型、实体渲染器、纹理图集和动态纹理。
+The mod loads only on the physical client. The export reads the mods, resource packs, baked models, entity renderers, texture atlases and dynamic textures actually enabled on the client.
 
-服务器无需安装本模组。客户端只能导出服务器已经发送并在客户端保持加载的数据。
+The server does not need this mod. The client can only export data the server has already sent and that is still loaded on the client.
 
-### 2.3 实体范围
+### 2.3 Entity scope
 
-导出：
+Exported:
 
-- 普通方块
-- 流体
-- 方块实体
-- 普通实体
-- 生物、载具、盔甲架、掉落物及模组实体
+- Ordinary blocks
+- Fluids
+- Block entities
+- Ordinary entities
+- Mobs, vehicles, armor stands, dropped items and modded entities
 
-排除：
+Excluded:
 
-- 玩家
-- 粒子
-- 天气
-- 天空和云
-- 实体阴影
-- 实体名称标签
-- 调试包围盒
+- Players
+- Particles
+- Weather
+- Sky and clouds
+- Entity shadows
+- Entity name tags
+- Debug bounding boxes
 
-实体输出为捕获时刻的静态姿态，不输出 Minecraft 动画控制器或时间轴。
+Entities are output as a static pose at capture time, and no Minecraft animation controller or timeline is output.
 
-### 2.4 未加载区块
+### 2.4 Unloaded chunks
 
-选区内未加载区块直接跳过。任务继续执行，并在 `report.json` 中记录缺失区块坐标和数量。
+Unloaded chunks inside the selection are skipped directly. The job continues, and the coordinates and count of the missing chunks are recorded in `report.json`.
 
-缺失区块与已加载区块的交界面按空气处理，保留已加载区域的边界表面。
+The interface between a missing chunk and a loaded chunk is treated as air, keeping the boundary surfaces of the loaded region.
 
-### 2.5 光照
+### 2.5 Lighting
 
-采用干净材质模式：
+A clean material mode is used:
 
-- 保留基础纹理
-- 保留 Alpha
-- 保留群系染色
-- 保留实体颜色
-- 保留发光语义
-- 不烘焙天空光
-- 不烘焙方块光
-- 不烘焙 Minecraft 环境遮蔽
+- Keep the base texture
+- Keep alpha
+- Keep biome tinting
+- Keep entity colors
+- Keep emissive semantics
+- Do not bake sky light
+- Do not bake block light
+- Do not bake Minecraft ambient occlusion
 
-### 2.6 输出位置
+### 2.6 Output location
 
-默认输出目录：
+Default output directory:
 
 ```text
-.minecraft/mcgltf-exports/<名称>/
+.minecraft/mcgltf-exports/<name>/
 ```
 
-已有同名目录时生成递增后缀，例如 `castle-2`、`castle-3`。正式导出目录不会被覆盖。
+When a directory with the same name exists, an incrementing suffix is generated, such as `castle-2`, `castle-3`. An official export directory is never overwritten.
 
-### 2.7 无法捕获的对象
+### 2.7 Objects that cannot be captured
 
-无法通过标准 Minecraft/NeoForge 顶点通道取得几何时，生成半透明洋红色包围盒占位物。占位节点记录注册表 ID、坐标、渲染器类名和失败原因。
+When geometry cannot be obtained through the standard Minecraft/NeoForge vertex channels, a translucent magenta bounding-box placeholder is generated. The placeholder node records the registry ID, coordinates, renderer class name and failure reason.
 
-## 3. 技术方案结论
+## 3. Technical approach conclusion
 
-采用渲染感知型混合导出管线：
+A render-aware hybrid export pipeline is adopted:
 
-1. 普通方块从最终 `BakedModel/BakedQuad` 提取。
-2. 流体通过 `BlockRenderDispatcher#renderLiquid` 和捕获型 `VertexConsumer` 提取。
-3. 方块实体调用实际 `BlockEntityRenderer` 并捕获其 `MultiBufferSource` 输出。
-4. 普通实体调用实际 `EntityRenderer` 并捕获其 `MultiBufferSource` 输出。
-5. 直接 GPU 实例化、自定义 OpenGL 或无法解释的着色器路径降级为材质替代或占位物。
+1. Ordinary blocks are extracted from the final `BakedModel/BakedQuad`.
+2. Fluids are extracted through `BlockRenderDispatcher#renderLiquid` and a capturing `VertexConsumer`.
+3. Block entities call the actual `BlockEntityRenderer` and capture its `MultiBufferSource` output.
+4. Ordinary entities call the actual `EntityRenderer` and capture its `MultiBufferSource` output.
+5. Direct GPU instancing, custom OpenGL or uninterpretable shader paths degrade to a material substitute or a placeholder.
 
-不以原始模型 JSON 解析作为主路径。NeoForge 自定义模型加载器、OBJ、Composite 和动态模型最终都会收敛为 `BakedModel`，读取最终烘焙结果具有更高兼容性。
+Parsing the original model JSON is not the main path. NeoForge custom model loaders, OBJ, Composite and dynamic models all eventually converge into a `BakedModel`, and reading the final baked result gives higher compatibility.
 
-不采用全帧 GPU 抓取。全帧抓取难以稳定恢复对象身份、Sprite 来源、RenderType 语义和独立材质。
+Full-frame GPU capture is not used. Full-frame capture can hardly recover object identity, Sprite provenance, RenderType semantics and standalone materials stably.
 
-## 4. 顶层模块
+## 4. Top-level modules
 
 ```text
 command
@@ -135,22 +135,22 @@ capture ──► scene ◄── material / texture
 
 ### 4.1 `command`
 
-负责客户端指令与选区状态：
+Responsible for client commands and the selection state:
 
 ```text
 /mcgltf pos1
 /mcgltf pos2
-/mcgltf export <名称>
-/mcgltf export <名称> confirm
+/mcgltf export <name>
+/mcgltf export <name> confirm
 /mcgltf status
 /mcgltf cancel
 ```
 
-选区与当前维度绑定。切换维度、退出世界或断开服务器时清空选区。
+The selection is bound to the current dimension. Changing dimension, leaving the world or disconnecting from the server clears the selection.
 
 ### 4.2 `job`
 
-`ExportJobManager` 维护全局唯一导出任务：
+`ExportJobManager` maintains a globally unique export job:
 
 ```text
 IDLE
@@ -160,24 +160,24 @@ IDLE
 → COMPLETED | CANCELLED | FAILED
 ```
 
-同一客户端同时只允许一个活动任务。任务提供进度、取消、异常隔离和聊天反馈。
+Only one active job is allowed on a client at a time. A job provides progress, cancellation, exception isolation and chat feedback.
 
 ### 4.3 `world`
 
-负责：
+Responsible for:
 
-- 规范化两个选区点
-- 计算整数闭区间
-- 枚举涉及的区块与区块截面
-- 标记已加载和未加载区块
-- 提供选区边界判断
-- 提供流体渲染使用的选区裁切视图
+- Normalizing the two selection points
+- Computing the integer closed interval
+- Enumerating the chunks and chunk sections involved
+- Marking loaded and unloaded chunks
+- Providing selection boundary checks
+- Providing the selection-clipped view used by fluid rendering
 
-该模块描述导出范围，不解析模型。
+This module describes the export range and does not parse models.
 
 ### 4.4 `capture`
 
-包含：
+Contains:
 
 - `BlockModelExtractor`
 - `FluidGeometryCapture`
@@ -188,11 +188,11 @@ IDLE
 - `PlaceholderFactory`
 - `RenderTypeInspector`
 
-Minecraft 客户端渲染 API 和 Access Transformer 访问集中在此模块。
+Minecraft client rendering APIs and Access Transformer access are concentrated in this module.
 
 ### 4.5 `scene`
 
-纯 Java 中间模型：
+A pure-Java intermediate model:
 
 ```text
 ExportScene
@@ -206,75 +206,75 @@ ExportScene
 └─ Diagnostic
 ```
 
-`scene` 不依赖 `BlockState`、`Entity`、`BakedQuad` 或其他 Minecraft 类型。
+`scene` does not depend on `BlockState`, `Entity`, `BakedQuad` or other Minecraft types.
 
 ### 4.6 `texture`
 
-负责：
+Responsible for:
 
-- 方块 Sprite 裁切
-- 实体资源纹理读取
-- 动态纹理像素复制
-- UV 图集坐标局部化
-- 纹理来源和输出路径注册
-- 动画纹理静态预览及源文件保存
+- Block Sprite cropping
+- Reading entity resource textures
+- Copying dynamic texture pixels
+- Localizing atlas UV coordinates
+- Registering texture sources and output paths
+- Static previews of animated textures and saving of the source files
 
 ### 4.7 `material`
 
-负责将 RenderType、纹理、透明、Cull、发光和采样语义映射到 glTF PBR 材质及独立材质 JSON。
+Responsible for mapping RenderType, texture, transparency, culling, emission and sampling semantics to glTF PBR materials and standalone material JSON.
 
 ### 4.8 `gltf`
 
-包含：
+Contains:
 
 - `BinaryBufferWriter`
 - `GltfDocumentBuilder`
 - `GltfExporter`
 
-使用流式 `.bin` 写入和最终 JSON 组装，不在内存中构建整个世界的顶点对象树。
+Uses streaming `.bin` writing and final JSON assembly, and never builds a vertex object tree of the whole world in memory.
 
 ### 4.9 `report`
 
-负责导出统计、缺失区块、兼容性降级、失败对象、耗时和任务状态。
+Responsible for export statistics, missing chunks, compatibility degradations, failed objects, elapsed time and job status.
 
-## 5. 任务数据流
+## 5. Job data flow
 
 ```text
-导出指令
-→ 参数与选区校验
-→ 区块加载状态规划
-→ 创建临时目录
-→ 分时捕获实体与区块
-→ 密封区块批次
-→ 后台写入 BIN/PNG/JSON
-→ 结构校验
-→ 原子发布正式目录
+export command
+→ argument and selection validation
+→ chunk load state planning
+→ create temporary directory
+→ time-sliced capture of entities and chunks
+→ seal chunk batches
+→ background write of BIN/PNG/JSON
+→ structure validation
+→ atomic publish of the official directory
 ```
 
-### 5.1 客户端线程职责
+### 5.1 Client thread responsibilities
 
-客户端线程执行：
+The client thread performs:
 
-- 读取 `ClientLevel`
-- 调用 BakedModel
-- 调用流体、BER 和实体渲染器
-- 读取纹理图集和动态纹理
-- 将捕获结果转换为纯 Java 批次
+- Reading `ClientLevel`
+- Calling BakedModel
+- Calling the fluid, BER and entity renderers
+- Reading texture atlases and dynamic textures
+- Converting capture results into pure-Java batches
 
-### 5.2 后台线程职责
+### 5.2 Background thread responsibilities
 
-后台单线程执行：
+The single background thread performs:
 
-- PNG 编码
-- 材质 JSON 写入
-- `.bin` 流式写入
-- `.gltf` JSON 组装
-- `report.json` 写入
-- 最终目录发布
+- PNG encoding
+- Material JSON writing
+- Streaming `.bin` writing
+- `.gltf` JSON assembly
+- `report.json` writing
+- Final directory publishing
 
-### 5.3 队列与预算
+### 5.3 Queue and budget
 
-默认配置：
+Default configuration:
 
 ```text
 captureBudgetMs = 6
@@ -282,123 +282,123 @@ writerQueueCapacity = 2
 softBlockLimit = 4_194_304
 ```
 
-每个客户端 Tick 最多消耗约 6 毫秒捕获预算。单个无法拆分的模组渲染器调用可以超过预算，其耗时必须进入报告。
+Each client tick spends at most about 6 ms of capture budget. A single indivisible mod renderer call may exceed the budget, and its time must go into the report.
 
-超过软体积限制时，普通 `export` 只显示警告和确认指令；`export <名称> confirm` 才开始任务。
+When the soft volume limit is exceeded, a plain `export` only shows a warning and the confirmation command; the job starts only with `export <name> confirm`.
 
-后台队列容量为两个密封批次。队列满时暂停捕获，避免内存无限增长。
+The background queue capacity is two sealed batches. When the queue is full, capture pauses to prevent unbounded memory growth.
 
-### 5.4 捕获顺序
+### 5.4 Capture order
 
-1. 先捕获选区内普通实体。
-2. 区块按 X、Z 稳定排序。
-3. 每个区块按 Y 方向 16 格截面处理。
-4. 每个位置依次处理普通方块和流体。
-5. 截面内方块实体生成独立对象节点。
-6. 截面密封后提交后台线程。
+1. First capture the ordinary entities inside the selection.
+2. Chunks are stably sorted by X, Z.
+3. Each chunk is processed in 16-block sections along the Y direction.
+4. At each position, ordinary blocks and fluids are processed in turn.
+5. Block entities inside a section produce independent object nodes.
+6. A sealed section is submitted to the background thread.
 
-稳定排序用于产生可比较、可测试的输出结构。
+The stable ordering is used to produce an output structure that can be compared and tested.
 
-### 5.5 一致性
+### 5.5 Consistency
 
-导出采用分时滚动快照。每个对象在处理时读取一次状态。大型导出期间世界若发生变化，不保证全部区块来自同一游戏 Tick。
+The export uses time-sliced rolling snapshots. Each object reads its state once when it is processed. If the world changes during a large export, it is not guaranteed that all chunks come from the same game tick.
 
-报告记录：
+The report records:
 
 - `captureStartGameTime`
 - `captureEndGameTime`
 - `snapshotMode: rolling`
 
-## 6. 普通方块捕获
+## 6. Ordinary block capture
 
-每个方块位置取得 `BlockState`、`BakedModel` 和 `ModelData`。
+For each block position the `BlockState`, `BakedModel` and `ModelData` are obtained.
 
-基础 ModelData 来自对应方块实体；随后调用模型的 `getModelData(level, pos, state, baseData)`，支持连纹理和模组动态数据。
+The base ModelData comes from the matching block entity; then the model's `getModelData(level, pos, state, baseData)` is called, supporting connected textures and mod dynamic data.
 
-按 `getRenderTypes(state, random, modelData)` 枚举渲染层。每个方向使用方块状态位置种子调用：
+Render layers are enumerated through `getRenderTypes(state, random, modelData)`. For each direction, using the block-state position seed, call:
 
 ```text
 getQuads(state, direction, random, modelData, renderType)
 ```
 
-### 6.1 面剔除
+### 6.1 Face culling
 
-- 选区内部使用原版 `Block.shouldRenderFace`
-- 选区外视为空气
-- 未加载相邻区块视为空气
-- `direction == null` 的不可遮挡 Quad 始终保留
-- 空气和 `RenderShape.INVISIBLE` 跳过
-- `ENTITYBLOCK_ANIMATED` 由方块实体捕获器负责动态内容
+- Inside the selection, the vanilla `Block.shouldRenderFace` is used
+- Outside the selection is treated as air
+- Unloaded neighboring chunks are treated as air
+- Non-occludable Quads with `direction == null` are always kept
+- Air and `RenderShape.INVISIBLE` are skipped
+- `ENTITYBLOCK_ANIMATED` is handled by the block-entity capturer for dynamic content
 
-### 6.2 Quad 转换
+### 6.2 Quad conversion
 
-每个 Quad：
+For each Quad:
 
-1. 应用方块状态的位置偏移。
-2. 将图集 UV 转为 Sprite 局部 `[0,1]` UV。
-3. 读取 BlockColors 群系染色。
-4. 将原始顶点色与 Tint 相乘。
-5. 忽略 AO、天空光和方块光。
-6. 使用 4 个顶点和 6 个索引生成两个三角形。
-7. 执行坐标变换、法线变换和绕序修正。
+1. Apply the position offset of the block state.
+2. Convert atlas UVs to Sprite-local `[0,1]` UVs.
+3. Read the BlockColors biome tint.
+4. Multiply the original vertex color by the Tint.
+5. Ignore AO, sky light and block light.
+6. Generate two triangles from 4 vertices and 6 indices.
+7. Apply the coordinate transform, normal transform and winding correction.
 
-不执行全区块顶点哈希合并。每个 Quad 内复用 4 个顶点，避免误合并不同法线和 UV 的顶点。
+No whole-chunk vertex hash merge is performed. The 4 vertices are reused within each Quad, to avoid wrongly merging vertices with different normals and UVs.
 
-## 7. 流体捕获
+## 7. Fluid capture
 
-通过 `BlockRenderDispatcher#renderLiquid` 输出到捕获型 `VertexConsumer`。
+Output goes through `BlockRenderDispatcher#renderLiquid` into a capturing `VertexConsumer`.
 
-默认传入选区裁切 `BlockAndTintGetter`：选区外返回空气和空流体，使水面与流体侧面在选区边界封口。
+A selection-clipped `BlockAndTintGetter` is passed by default: outside the selection it returns air and empty fluid, so the water surface and fluid sides are closed at the selection boundary.
 
-若模组流体错误地将接口强制转型为 `ClientLevel`：
+If a mod fluid wrongly force-casts the interface to `ClientLevel`:
 
-1. 记录兼容性警告。
-2. 使用真实 ClientLevel 重试。
-3. 在报告中标记边界可能未封口。
+1. Record a compatibility warning.
+2. Retry with the real ClientLevel.
+3. Mark in the report that the boundary may not be closed.
 
-流体纹理识别顺序：
+Fluid texture identification order:
 
-1. `IClientFluidTypeExtensions` 提供的 Still、Flowing、Overlay Sprite
-2. 根据一个图元的 UV 范围匹配候选 Sprite
-3. 查询完整方块图集的 UV 区域索引
-4. 使用白色纹理和顶点色降级
+1. The Still, Flowing and Overlay Sprites provided by `IClientFluidTypeExtensions`
+2. Match candidate Sprites by the UV range of one primitive
+3. Query the UV region index of the complete block atlas
+4. Degrade to a white texture and vertex colors
 
-## 8. 方块实体捕获
+## 8. Block entity capture
 
-取得实际 `BlockEntityRenderer`，使用局部原点 PoseStack 和捕获型 MultiBufferSource 调用。
+Obtain the actual `BlockEntityRenderer` and call it with a local-origin PoseStack and a capturing MultiBufferSource.
 
-普通方块的静态 BakedModel 与 BER 动态几何同时保留。方块实体输出为独立 glTF 节点，节点保存：
+The static BakedModel of an ordinary block and the dynamic BER geometry are both kept. A block entity is output as a standalone glTF node, which stores:
 
-- 方块实体注册表 ID
-- 世界坐标
-- 局部坐标
-- 渲染器类名
-- 降级信息
+- The block entity registry ID
+- World coordinates
+- Local coordinates
+- The renderer class name
+- Degradation information
 
-## 9. 普通实体捕获
+## 9. Ordinary entity capture
 
-查询选区 AABB 内实体：
+Query the entities inside the selection AABB:
 
-- 排除 Player
-- 排除已移除实体
-- 每个实体使用独立捕获上下文
-- 保留盔甲、手持物、附加渲染层和绳索
-- 忽略名称标签、阴影、火焰和调试线框
-- Glint 降级为独立半透明发光层
-- 当前模型或骨骼姿态烘焙为静态顶点
+- Exclude Player
+- Exclude removed entities
+- Each entity uses its own capture context
+- Keep armor, held items, additional render layers and leashes
+- Ignore name tags, shadows, fire and debug wireframes
+- Glint degrades to a standalone translucent emissive layer
+- The current model or skeleton pose is baked into static vertices
 
-实体节点保存：
+An entity node stores:
 
-- 实体注册表 ID
+- The entity registry ID
 - UUID
-- 世界坐标
-- 局部坐标
-- 渲染器类名
-- 降级信息
+- World coordinates
+- Local coordinates
+- The renderer class name
+- Degradation information
 
-## 10. 顶点与拓扑
+## 10. Vertices and topology
 
-中间顶点格式：
+Intermediate vertex format:
 
 ```text
 POSITION : float32 × 3
@@ -408,9 +408,9 @@ COLOR_0  : uint8 normalized × 4
 INDEX    : uint32
 ```
 
-拓扑映射：
+Topology mapping:
 
-| Minecraft Mode | glTF Mode |
+| Minecraft mode | glTF mode |
 |---|---|
 | QUADS | TRIANGLES |
 | TRIANGLES | TRIANGLES |
@@ -418,60 +418,60 @@ INDEX    : uint32
 | TRIANGLE_FAN | TRIANGLE_FAN |
 | LINES | LINES |
 | LINE_STRIP | LINE_STRIP |
-| 其他模式 | 占位物 |
+| other modes | placeholder |
 
-每个 MeshPrimitive 只对应一个 MaterialKey。普通方块按区块和材质合并；实体与方块实体保持独立节点。
+Each MeshPrimitive corresponds to exactly one MaterialKey. Ordinary blocks are merged by chunk and material; entities and block entities stay independent nodes.
 
-## 11. 坐标系统
+## 11. Coordinate system
 
-Minecraft 坐标转换为 glTF 右手坐标：
+Minecraft coordinates are converted to glTF right-handed coordinates:
 
 ```text
 (X, Y, Z) → (X, Y, -Z)
 ```
 
-同时：
+At the same time:
 
-- 法线 Z 分量取反
-- 三角形绕序反转
-- 选区最小点作为局部原点
-- 世界原点和完整选区坐标写入根节点 `extras`
+- The Z component of normals is negated
+- Triangle winding is reversed
+- The minimum point of the selection is the local origin
+- The world origin and the complete selection coordinates are written into the root node `extras`
 
-一格对应一米。Blender glTF 导入器负责从 glTF Y-Up 转换到 Blender Z-Up。
+One block equals one meter. The Blender glTF importer is responsible for converting from glTF Y-Up to Blender Z-Up.
 
-## 12. 纹理
+## 12. Textures
 
-纹理不重新打包为图集。输出路径保持资源身份：
+Textures are not repacked into an atlas. Output paths keep the resource identity:
 
 ```text
 textures/<namespace>/<path>.png
 ```
 
-同一个资源位置只输出一次。不同资源位置即使像素相同，也保持独立文件。
+The same resource location is output only once. Different resource locations stay independent files even if their pixels are identical.
 
-动态纹理输出到：
+Dynamic textures are output to:
 
 ```text
-textures/generated/<sha256前16位>.png
+textures/generated/<first 16 chars of sha256>.png
 ```
 
-动态纹理读取失败时：
+When reading a dynamic texture fails:
 
-- 几何继续保留
-- 使用紫黑棋盘纹理
-- 写入报告
+- The geometry is kept
+- A purple-black checkerboard texture is used
+- It is written into the report
 
-### 12.1 动画纹理
+### 12.1 Animated textures
 
-- glTF 材质使用第一逻辑帧
-- 原始动画 PNG 保存到 `textures/source/<namespace>/<path>.png`
-- `.mcmeta` 保存到对应 PNG 旁的 `<文件名>.png.mcmeta`
-- 材质 JSON 记录帧尺寸、序列和时长
-- 报告标记 `ANIMATED_TEXTURE_STATIC_PREVIEW`
+- The glTF material uses the first logical frame
+- The original animated PNG is saved to `textures/source/<namespace>/<path>.png`
+- The `.mcmeta` is saved next to the matching PNG as `<file name>.png.mcmeta`
+- The material JSON records the frame size, sequence and durations
+- The report marks `ANIMATED_TEXTURE_STATIC_PREVIEW`
 
-## 13. 材质
+## 13. Materials
 
-MaterialKey 由以下字段组成：
+MaterialKey consists of the following fields:
 
 - TextureKey
 - AlphaMode
@@ -481,9 +481,9 @@ MaterialKey 由以下字段组成：
 - BlendSemantic
 - SamplerMode
 
-群系和实体颜色通过 `COLOR_0` 表达，不制造颜色材质变体。
+Biome and entity colors are expressed through `COLOR_0` and do not create color material variants.
 
-默认 PBR：
+Default PBR:
 
 ```text
 metallicFactor = 0
@@ -491,23 +491,23 @@ roughnessFactor = 1
 baseColorFactor = [1, 1, 1, 1]
 ```
 
-材质语义：
+Material semantics:
 
-| Minecraft 语义 | glTF |
+| Minecraft semantic | glTF |
 |---|---|
 | solid | OPAQUE |
-| cutout / cutout_mipped | MASK，alphaCutoff 0.5 |
+| cutout / cutout_mipped | MASK, alphaCutoff 0.5 |
 | translucent | BLEND |
 | eyes / emissive | emissiveTexture / emissiveFactor |
-| glint | BLEND + Emissive 降级层 |
-| 禁用 Cull | doubleSided |
-| 未知自定义 RenderType | 根据透明、Cull、纹理状态推断 |
+| glint | BLEND + Emissive degradation layer |
+| culling disabled | doubleSided |
+| unknown custom RenderType | inferred from transparency, cull and texture state |
 
-采样默认使用最近邻，保持像素边缘。
+Sampling defaults to nearest-neighbor, keeping pixel edges.
 
-### 13.1 独立材质 JSON
+### 13.1 Standalone material JSON
 
-每个 glTF 材质具有独立描述文件，至少包含：
+Each glTF material has a standalone description file, containing at least:
 
 ```json
 {
@@ -526,10 +526,10 @@ baseColorFactor = [1, 1, 1, 1]
 }
 ```
 
-## 14. glTF 场景结构
+## 14. glTF scene structure
 
 ```text
-MCGLTF_<名称>
+MCGLTF_<name>
 ├─ Chunks
 │  ├─ Chunk_0_0
 │  └─ Chunk_0_1
@@ -538,24 +538,24 @@ MCGLTF_<名称>
 └─ Placeholders
 ```
 
-根节点 extras 保存：
+The root node extras store:
 
-- Minecraft 版本
-- NeoForge 版本
-- 当前维度
-- 选区世界坐标
-- 局部原点
-- 资源包列表
-- 已加载模组及版本
-- 捕获开始和结束时间
-- 生成器版本
+- The Minecraft version
+- The NeoForge version
+- The current dimension
+- The world coordinates of the selection
+- The local origin
+- The resource pack list
+- The loaded mods and versions
+- The capture start and end time
+- The generator version
 
-## 15. 输出结构
+## 15. Output structure
 
 ```text
-.minecraft/mcgltf-exports/<名称>/
-├─ <名称>.gltf
-├─ <名称>.bin
+.minecraft/mcgltf-exports/<name>/
+├─ <name>.gltf
+├─ <name>.bin
 ├─ textures/
 │  ├─ <namespace>/<path>.png
 │  ├─ generated/<hash>.png
@@ -565,64 +565,64 @@ MCGLTF_<名称>
 └─ report.json
 ```
 
-导出名称允许中文和常规 Unicode，统一为 NFC。拒绝：
+Export names allow Chinese and regular Unicode, normalized to NFC. Rejected:
 
-- `/` 与 `\`
-- 控制字符
-- `.` 与 `..`
-- Windows 保留名称
-- 末尾空格或句点
-- 超过 64 个 Unicode 码点的名称
+- `/` and `\`
+- Control characters
+- `.` and `..`
+- Windows reserved names
+- Trailing spaces or periods
+- Names longer than 64 Unicode code points
 
-## 16. 事务式输出
+## 16. Transactional output
 
-任务先写入：
+A job first writes to:
 
 ```text
 .minecraft/mcgltf-exports/.tmp-<UUID>/
 ```
 
-全部文件成功关闭并通过内部结构检查后，再原子重命名为正式目录。
+After all files are closed successfully and pass the internal structure check, the directory is atomically renamed to the official directory.
 
-失败或取消时只清理本任务临时目录。已经存在的正式导出不会修改。
+On failure or cancellation only this job's temporary directory is cleaned. Existing official exports are never modified.
 
-## 17. 错误策略
+## 17. Error policy
 
-### 17.1 致命错误
+### 17.1 Fatal errors
 
-以下错误终止任务：
+The following errors terminate the job:
 
-- 未进入世界
-- 选区不完整
-- 选区跨维度
-- 输出目录不可写
-- 后台写入器失败
-- glTF 索引关系不合法
-- 内存耗尽
-- 磁盘空间耗尽
-- 世界退出、断开连接或资源包重载
+- Not in a world
+- Incomplete selection
+- Cross-dimension selection
+- Output directory not writable
+- Background writer failure
+- Invalid glTF index relations
+- Out of memory
+- Out of disk space
+- Leaving the world, disconnecting or a resource pack reload
 
-### 17.2 可降级错误
+### 17.2 Degradable errors
 
-以下错误继续任务：
+The following errors let the job continue:
 
-- 单个模型或渲染器异常
-- 单张纹理无法读取
-- 自定义 RenderType 无法解释
-- GPU 实例化对象没有顶点输出
-- 动态纹理读取失败
-- 不支持的顶点拓扑
+- An exception in a single model or renderer
+- A single texture that cannot be read
+- A custom RenderType that cannot be interpreted
+- A GPU-instanced object with no vertex output
+- A dynamic texture read failure
+- Unsupported vertex topology
 
-降级顺序：
+Degradation order:
 
-1. 几何有效、纹理失败：紫黑棋盘纹理。
-2. 几何有效、材质未知：通用 PBR 材质。
-3. 几何无效：半透明洋红色包围盒。
-4. 节点 extras 和报告同时记录诊断信息。
+1. Geometry valid, texture failed: purple-black checkerboard texture.
+2. Geometry valid, material unknown: generic PBR material.
+3. Geometry invalid: translucent magenta bounding box.
+4. The node extras and the report both record the diagnostic information.
 
-## 18. 报告
+## 18. Report
 
-`report.json` 至少包含：
+`report.json` contains at least:
 
 ```json
 {
@@ -661,141 +661,141 @@ MCGLTF_<名称>
 }
 ```
 
-`scannedPositions` 统计已加载区块内实际访问的方块位置；`renderedBlocks` 与 `renderedFluids` 只统计产生有效几何的对象。每条诊断包含稳定错误代码、对象 ID、坐标、渲染器类名、异常类型和可读消息。
+`scannedPositions` counts the block positions actually visited inside loaded chunks; `renderedBlocks` and `renderedFluids` only count objects that produced valid geometry. Each diagnostic contains a stable error code, object ID, coordinates, renderer class name, exception type and a readable message.
 
-## 19. 测试策略
+## 19. Test strategy
 
-所有生产行为使用测试驱动开发。
+All production behavior uses test-driven development.
 
-### 19.1 纯 Java 单元测试
+### 19.1 Pure-Java unit tests
 
-覆盖：
+Cover:
 
-- 选区规范化
-- Unicode 路径安全
-- 坐标与法线变换
-- 三角形绕序
-- Quad 三角化
-- UV 局部化
-- 顶点色归一化
-- MaterialKey 去重
-- RenderType 语义映射
-- BufferView 四字节对齐
+- Selection normalization
+- Unicode path safety
+- Coordinate and normal transforms
+- Triangle winding
+- Quad triangulation
+- UV localization
+- Vertex color normalization
+- MaterialKey deduplication
+- RenderType semantic mapping
+- BufferView four-byte alignment
 - Accessor min/max
-- 索引边界
-- 状态机和取消
-- 报告序列化
+- Index bounds
+- State machine and cancellation
+- Report serialization
 
-### 19.2 捕获适配器测试
+### 19.2 Capture adapter tests
 
-使用可控假模型和假渲染器验证：
+Use controllable fake models and fake renderers to verify:
 
-- 方块种子稳定性
-- 内部面剔除
-- 选区边界封口
+- Block seed stability
+- Internal face culling
+- Selection boundary closing
 - Tint Index
-- ModelData 传递
-- 多 RenderType 分材质
-- VertexConsumer 最后顶点提交
-- 全部支持的拓扑
-- 异常和零顶点降级
+- ModelData passing
+- Per-material split for multiple RenderTypes
+- Last-vertex submission of VertexConsumer
+- All supported topologies
+- Exception and zero-vertex degradation
 
-### 19.3 开发客户端集成场景
+### 19.3 Development client integration scene
 
-测试场景包含：
+The test scene contains:
 
-- 石头、草方块、树叶、玻璃
-- 水、岩浆
-- 箱子、告示牌、旗帜
-- 牛、盔甲架、掉落物、船
-- 自定义动态 BakedModel
-- 自定义 ModelData 模型
-- 自定义透明 RenderType
-- 自定义流体
-- 自定义 BER
-- 自定义实体渲染器
-- 故意无法捕获的 GPU 路径替身
+- Stone, grass block, leaves, glass
+- Water, lava
+- Chest, sign, banner
+- Cow, armor stand, dropped item, boat
+- A custom dynamic BakedModel
+- A custom ModelData model
+- A custom transparent RenderType
+- A custom fluid
+- A custom BER
+- A custom entity renderer
+- A stand-in for a deliberately uncapturable GPU path
 
-### 19.4 glTF 验证
+### 19.4 glTF validation
 
-端到端结果必须满足：
+The end-to-end result must satisfy:
 
-- URI 全部为相对路径
-- 所有引用文件存在
-- BufferView 四字节对齐
-- Accessor 范围正确
-- 索引有效
-- 顶点属性无 NaN 或 Infinity
-- 法线长度在误差范围内
-- Primitive 材质引用有效
-- Khronos glTF Validator 零错误
+- All URIs are relative paths
+- All referenced files exist
+- BufferViews are four-byte aligned
+- Accessor ranges are correct
+- Indices are valid
+- Vertex attributes contain no NaN or Infinity
+- Normal lengths are within tolerance
+- Primitive material references are valid
+- The Khronos glTF Validator reports zero errors
 
-### 19.5 Blender 验收
+### 19.5 Blender acceptance
 
-- 无需手工重连纹理
-- 场景层级清晰
-- 群系颜色正确
-- OPAQUE、MASK、BLEND 正确
-- 实体保持静态姿态
-- 一格一米
-- 世界坐标可从 extras 恢复
-- 独立纹理可替换
+- No manual texture relinking needed
+- A clear scene hierarchy
+- Correct biome colors
+- Correct OPAQUE, MASK and BLEND
+- Entities keep their static pose
+- One block per meter
+- The world coordinates can be recovered from extras
+- Standalone textures can be replaced
 
-## 20. 性能验收
+## 20. Performance acceptance
 
-- 默认每 Tick 捕获预算约 6 ms
-- 单次不可拆分调用超时会被记录
-- 写入队列不超过两个批次
-- 已写区块截面可释放顶点内存
-- 不保存全场景顶点
-- 内存复杂度约为当前截面、两个写入批次和全局索引之和
-- 取消后不再产生新捕获批次
-- 取消和失败不产生正式结果目录
+- Default capture budget of about 6 ms per tick
+- A single indivisible call that times out is recorded
+- The write queue never exceeds two batches
+- The vertex memory of an already-written chunk section can be released
+- Whole-scene vertices are not stored
+- Memory complexity is about the sum of the current section, two write batches and the global index
+- After cancellation no new capture batches are produced
+- Cancellation and failure produce no official result directory
 
-## 21. 功能验收
+## 21. Functional acceptance
 
-- [ ] pos1 与 pos2 正确保存
-- [ ] 跨维度选区被拒绝
-- [ ] 未加载区块被跳过并报告
-- [ ] 原版与模组 BakedModel 可导出
-- [ ] 流体表面和选区边界正确
-- [ ] 方块实体可导出
-- [ ] 普通实体可导出
-- [ ] 玩家被排除
-- [ ] 纹理独立输出
-- [ ] 材质 JSON 独立输出
-- [ ] 无法捕获对象生成占位物
-- [ ] Blender 可直接导入
-- [ ] glTF Validator 零错误
-- [ ] 失败不污染正式输出
+- [ ] pos1 and pos2 are saved correctly
+- [ ] A cross-dimension selection is rejected
+- [ ] Unloaded chunks are skipped and reported
+- [ ] Vanilla and modded BakedModels can be exported
+- [ ] Fluid surfaces and selection boundaries are correct
+- [ ] Block entities can be exported
+- [ ] Ordinary entities can be exported
+- [ ] Players are excluded
+- [ ] Textures are output independently
+- [ ] Material JSON is output independently
+- [ ] Uncapturable objects generate placeholders
+- [ ] Blender can import directly
+- [ ] The glTF Validator reports zero errors
+- [ ] Failures do not pollute the official output
 
-## 22. 实施里程碑
+## 22. Implementation milestones
 
-1. NeoForge 工程与纯 Java glTF 核心。
-2. 指令、选区和任务状态机。
-3. BakedModel 方块与 Sprite 纹理闭环。
-4. 流体、群系颜色和透明材质。
-5. 方块实体与普通实体捕获。
-6. 占位降级、报告、取消和事务输出。
-7. 集成测试、Khronos Validator 和 Blender 验收。
+1. NeoForge project and the pure-Java glTF core.
+2. Commands, selection and the job state machine.
+3. The BakedModel block and Sprite texture loop.
+4. Fluids, biome colors and transparent materials.
+5. Block entity and ordinary entity capture.
+6. Placeholder degradation, report, cancellation and transactional output.
+7. Integration tests, Khronos Validator and Blender acceptance.
 
-每个里程碑必须产生可构建、可测试、可提交的状态。
+Every milestone must produce a state that can be built, tested and committed.
 
-## 23. 已知兼容性边界
+## 23. Known compatibility boundaries
 
-| 对象 | 预期 |
+| Object | Expectation |
 |---|---|
-| 原版及模组 JSON 方块 | 高 |
-| NeoForge 自定义 BakedModel | 高 |
-| OBJ、Composite、ModelData 模型 | 高 |
-| 群系染色、随机变体、连纹理 | 高 |
-| 标准及模组流体 | 高 |
-| 标准 BER 与 EntityRenderer | 较高 |
-| 通过 MultiBufferSource 输出的骨骼实体 | 较高，静态姿态 |
-| Flywheel 或其他 GPU 实例化对象 | 占位物或适配器扩展 |
-| 自定义着色器效果 | 基础材质降级或占位物 |
+| Vanilla and modded JSON blocks | High |
+| NeoForge custom BakedModel | High |
+| OBJ, Composite and ModelData models | High |
+| Biome tinting, random variants, connected textures | High |
+| Standard and modded fluids | High |
+| Standard BER and EntityRenderer | Fairly high |
+| Skeletal entities output through MultiBufferSource | Fairly high, static pose |
+| Flywheel or other GPU-instanced objects | Placeholder or adapter extension |
+| Custom shader effects | Base material degradation or placeholder |
 
-## 24. 参考资料
+## 24. References
 
 - [NeoForge 1.21.1 Getting Started](https://docs.neoforged.net/docs/1.21.1/gettingstarted/)
 - [NeoForge 1.21.1 BakedModel](https://docs.neoforged.net/docs/1.21.1/resources/client/models/bakedmodel/)

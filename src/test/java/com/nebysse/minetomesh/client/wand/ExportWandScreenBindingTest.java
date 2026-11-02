@@ -31,9 +31,9 @@ class ExportWandScreenBindingTest {
         assertTrue(source.contains("LockedSelectionService lockedSelectionService"));
         assertTrue(source.contains("this.lockedSelectionService = Objects.requireNonNull("));
         assertTrue(source.contains("toggleLockedSelection()"));
-        assertTrue(source.contains("Component.literal(\"手持预览\")"));
-        assertTrue(source.contains("Component.literal(\"锁定选区\")"));
-        assertTrue(source.contains("Component.literal(\"导出玩家\")"));
+        assertTrue(source.contains("Component.literal(\"Preview\")"));
+        assertTrue(source.contains("Component.literal(\"Lock\")"));
+        assertTrue(source.contains("Component.literal(\"Players\")"));
         int method = source.indexOf("private void toggleLockedSelection()");
         int nextMethod = source.indexOf("\n    private ", method + 1);
         String body = source.substring(method, nextMethod);

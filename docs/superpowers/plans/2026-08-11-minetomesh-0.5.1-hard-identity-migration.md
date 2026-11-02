@@ -624,14 +624,14 @@ Change `DocumentationPolicyTest.readmeDocumentsTheWandReleaseAndMigration` to re
 ```java
 for (String fragment : List.of(
         "MineToMesh-0.5.1.jar",
-        "客户端和服务端",
-        "导出魔杖",
+        "both the client and the server",
+        "Export Wand",
         "/minetomesh",
         ".minecraft/minetomesh-exports/",
         "minetomesh:export_wand",
         "com.nebysse.minetomesh",
-        "不提供 Missing Mapping",
-        "升级前请备份世界")) {
+        "provides no Missing Mapping",
+        "Back up your world before upgrading")) {
     assertTrue(readme.contains(fragment),
             "README must mention: " + fragment);
 }
@@ -646,8 +646,8 @@ for (String fragment : List.of(
         "MineToMesh-0.5.1.jar",
         "/minetomesh",
         "minetomesh-exports",
-        "旧魔杖缺失",
-        "旧导出目录保留")) {
+        "Old wand missing",
+        "Old export directory kept")) {
     assertTrue(matrix.contains(fragment),
             "manual matrix must cover: " + fragment);
 }
@@ -666,7 +666,7 @@ Expected: FAIL because README and the manual matrix still describe 0.5.0/current
 Apply these exact current-release facts:
 
 ```markdown
-MineToMesh 0.5.1 使用内部 Mod ID `minetomesh`，Java 包为 `com.nebysse.minetomesh`。
+MineToMesh 0.5.1 uses the internal Mod ID `minetomesh` and the Java package `com.nebysse.minetomesh`.
 ```
 
 Installation must name `MineToMesh-0.5.1.jar`. Command examples must use:
@@ -674,8 +674,8 @@ Installation must name `MineToMesh-0.5.1.jar`. Command examples must use:
 ```text
 /minetomesh pos1
 /minetomesh pos2
-/minetomesh export <名称>
-/minetomesh export <名称> confirm
+/minetomesh export <name>
+/minetomesh export <name> confirm
 /minetomesh status
 /minetomesh cancel
 ```
@@ -689,11 +689,11 @@ Output root must be:
 Add a dedicated warning:
 
 ```markdown
-## 0.5.1 硬迁移警告
+## 0.5.1 hard migration warning
 
-0.5.1 将 Mod ID 从 `mcgltf` 改为 `minetomesh`，注册项同步变为 `minetomesh:*`，包括 `minetomesh:export_wand`。Java 包改为 `com.nebysse.minetomesh`。本版本不提供 Missing Mapping，不注册 `/mcgltf` 别名，也不迁移旧魔杖数据。旧世界中的 `mcgltf:*` 物品可能缺失，升级前请备份世界。
+0.5.1 changes the Mod ID from `mcgltf` to `minetomesh`, and registry entries change accordingly to `minetomesh:*`, including `minetomesh:export_wand`. The Java package changes to `com.nebysse.minetomesh`. This version provides no Missing Mapping, registers no `/mcgltf` alias and does not migrate old wand data. `mcgltf:*` items in old worlds may be missing, so back up your world before upgrading.
 
-旧 `.minecraft/mcgltf-exports/` 目录不会被移动或删除；0.5.1 的新导出写入 `.minecraft/minetomesh-exports/`。
+The old `.minecraft/mcgltf-exports/` directory is not moved or deleted; new 0.5.1 exports are written to `.minecraft/minetomesh-exports/`.
 ```
 
 - [ ] **Step 4: Update the manual matrix**
@@ -701,10 +701,10 @@ Add a dedicated warning:
 Change heading, target JAR, and candidate section to 0.5.1. Add owner-only rows:
 
 ```markdown
-| 新命令根 | 执行 `/minetomesh status`，再尝试 `/mcgltf status` | 新命令可用，旧命令未注册 |
-| 新导出目录 | 执行一次新导出 | 结果只写入 `.minecraft/minetomesh-exports/` |
-| 旧导出目录保留 | 升级前创建 `.minecraft/mcgltf-exports/` 并放入标记文件 | 启动与导出后旧目录、标记文件原样保留 |
-| 旧魔杖缺失 | 备份后用含 `mcgltf:export_wand` 的旧世界启动 0.5.1 | 允许出现缺失注册项；世界文件不被 MineToMesh 主动迁移 |
+| New command root | Run `/minetomesh status`, then try `/mcgltf status` | The new command works and the old command is not registered |
+| New export directory | Perform one new export | Results are written only to `.minecraft/minetomesh-exports/` |
+| Old export directory kept | Before upgrading, create `.minecraft/mcgltf-exports/` and put a marker file in it | After startup and export, the old directory and marker file are left unchanged |
+| Old wand missing | After a backup, start 0.5.1 with an old world containing `mcgltf:export_wand` | Missing registry entries are allowed; MineToMesh does not actively migrate the world files |
 ```
 
 Mark the old-world row destructive and require a copied world, never the only world save.

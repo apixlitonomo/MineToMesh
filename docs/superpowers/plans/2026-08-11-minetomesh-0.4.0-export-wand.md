@@ -311,7 +311,7 @@ Recipe:
 }
 ```
 
-Add `item.mcgltf.export_wand` as `导出魔杖` and `Export Wand`; retain `itemGroup.mcgltf`.
+Add `item.mcgltf.export_wand` as `Export Wand` in en_us and its Chinese equivalent in zh_cn; retain `itemGroup.mcgltf`.
 
 - [ ] **Step 4: Generate the engineering survey-rod texture**
 
@@ -841,8 +841,8 @@ Require:
 McGltf.VERSION == 0.4.0
 metadata version="0.4.0"
 glTF generator == MineToMesh 0.4.0
-README mentions mcgltf-0.4.0.jar and 导出魔杖
-README does not instruct users to craft or place 区域导出工作台
+README mentions mcgltf-0.4.0.jar and Export Wand
+README does not instruct users to craft or place the region export workstation
 ```
 
 - [ ] **Step 2: Run and verify RED**
@@ -952,7 +952,7 @@ repeat selection and export
 move wand while GUI is open: GUI closes and task cancels
 ```
 
-Expected: the second-world export does not remain at “等待服务端授权”. Import both output formats into Blender and confirm geometry/material presence.
+Expected: the second-world export does not remain at “Waiting for server authorization”. Import both output formats into Blender and confirm geometry/material presence.
 
 - [ ] **Step 6: Final evidence and delivery**
 

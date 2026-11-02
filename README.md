@@ -1,36 +1,36 @@
 # MineToMesh
 
-MineToMesh 是面向 Minecraft 1.21.1 NeoForge 的世界导出模组，将客户端当前已加载的选区写成 Blender 可编辑的 glTF 2.0 与文本 OpenUSD（USDA）场景。1.2.0 增加精确共面 Quad 分层，解决 Powered Rail 和草方块叠层在 Blender 中发黑或闪烁的问题；USDA 保留源 Quad，并通过 PreviewSurface 材质引用外部 PNG。导出魔杖继续负责保存和编辑选区，服务端权威校验物品身份、坐标与权限，客户端负责渲染捕获、纹理读取和文件写入。
+MineToMesh is a world-export mod for Minecraft 1.21.1 on NeoForge. It writes the selection currently loaded on the client as Blender-editable glTF 2.0 and text-based OpenUSD (USDA) scenes. Version 1.2.0 adds exact coplanar quad layering, which fixes Powered Rail and grass-block overlay layers turning black or flickering in Blender; USDA keeps the source quads and references external PNG textures through PreviewSurface materials. The Export Wand continues to store and edit selections: the server authoritatively validates the item identity, coordinates and permissions, while the client handles render capture, texture reads and file writing.
 
-## 特性
+## Features
 
-- 客户端和服务端均需安装，目标版本为 NeoForge 21.1.244。
-- NeoForge 使用正式模组列表封面，作者显示为 `岚苍穹 nebysse`。
-- 每根导出魔杖独立保存 `wandId`、维度、POS1、POS2、Overlay 开关与导出名；移动物品不会丢失数据，两根魔杖互不串线。
-- 支持原版及模组 `BakedModel`、流体、方块实体渲染器和普通实体渲染器。
-- 动态方块实体按完整 `MaterialKey` 全局合批；相同材质的连续传送带等几何在 Blender 中形成一个网格对象。
-- 根据 Quad 的实际 Atlas UV 反查真实 Sprite，兼容 Create 6.x `*_connected` 纹理表，不引入 Create、Catnip 或 Flywheel 硬依赖。
-- 原版草方块保留底层侧面与 Tint Overlay 双层几何；整个选区的 Overlay 合并为一个 `selection/grass_side_overlay` 对象。
-- 每次导出同时生成 glTF 2.0 与 USDA，两种格式共享外部 PNG 纹理。
-- glTF 按规范三角化；USDA 保留捕获到的原始 Quad，并固定 `subdivisionScheme = "none"`。
-- 精确重叠的普通方块 Quad 按自身法线以 `1/1024` 格逐层偏移；首层位置保持不变，所有叠层几何均保留。
-- USDA 使用 PreviewSurface 表达纹理、顶点 Tint、透明、双面和发光语义；最近邻语义写入 `minetomesh:samplerMode` 与材质 Sidecar。若 Blender 导入器未读取它，需把 Image Texture 插值手动设为 `Closest`。
-- 输出层级固定为 `Chunks`、`BlockEntities`、`Entities`、`Placeholders`、`Overlays`。
-- 坐标以选区最小点为局部原点，一格对应 Blender 一米；导出空间保留 Minecraft 的 `(X,Y,Z)` 相对方向，不执行轴反射。
-- Blender 导入 glTF 后执行 Y-up 到 Z-up 的轴旋转：Minecraft `+X` → Blender `+X`、Minecraft `+Y` → Blender `+Z`、Minecraft `+Z` → Blender `-Y`。
-- 未加载区块不会被强制加载，诊断写入 `report.json`。
+- Must be installed on both client and server; the target version is NeoForge 21.1.244.
+- NeoForge shows an official mod-list cover image, and the author is displayed as `岚苍穹 nebysse` (Lan Cangqiong nebysse).
+- Each Export Wand independently stores its `wandId`, dimension, POS1, POS2, Overlay toggle and export name; moving the item never loses data, and two wands never interfere with each other.
+- Supports vanilla and modded `BakedModel`s, fluids, block-entity renderers and ordinary entity renderers.
+- Dynamic block entities are batched globally by complete `MaterialKey`; consecutive geometry with the same material (for example conveyor belts) becomes a single mesh object in Blender.
+- The real sprite is resolved from each quad's actual atlas UVs, which is compatible with Create 6.x `*_connected` texture sheets without any hard dependency on Create, Catnip or Flywheel.
+- Vanilla grass blocks keep both the base side geometry and the tint overlay geometry; all overlays in the selection are merged into a single `selection/grass_side_overlay` object.
+- Every export produces both glTF 2.0 and USDA, and the two formats share the same external PNG textures.
+- glTF is triangulated as the specification requires; USDA keeps the captured source quads and fixes `subdivisionScheme = "none"`.
+- Normal block quads that overlap exactly are offset layer by layer along their own normals by `1/1024` block; the first layer stays in place and all stacked geometry is kept.
+- USDA uses PreviewSurface to express textures, vertex tint, transparency, double-sided rendering and emission. Nearest-neighbor sampling is written to `minetomesh:samplerMode` and the material sidecar. If the Blender importer does not read it, set the Image Texture interpolation to `Closest` manually.
+- The output hierarchy is fixed as `Chunks`, `BlockEntities`, `Entities`, `Placeholders`, `Overlays`.
+- Coordinates use the minimum corner of the selection as the local origin, and one block equals one Blender meter. The export space keeps Minecraft's relative `(X,Y,Z)` orientation and performs no axis reflection.
+- After Blender imports the glTF it rotates from Y-up to Z-up: Minecraft `+X` → Blender `+X`, Minecraft `+Y` → Blender `+Z`, Minecraft `+Z` → Blender `-Y`.
+- Unloaded chunks are never force-loaded; diagnostics are written to `report.json`.
 
-## 安装
+## Installation
 
-1. 安装 Minecraft 1.21.1 与 NeoForge 21.1.244。
-2. 将 `MineToMesh-1.2.0.jar` 放入**客户端和服务端**的 `mods/` 目录，移除其他 MineToMesh JAR。
-3. 启动游戏。实际导出文件写在发起操作的玩家客户端。
+1. Install Minecraft 1.21.1 and NeoForge 21.1.244.
+2. Put `MineToMesh-1.2.0.jar` into the `mods/` folder of **both the client and the server**, and remove any other MineToMesh JARs.
+3. Start the game. Exported files are written on the client of the player who started the export.
 
-1.2.0 的运行时 Mod ID 为 `minetomesh`，Java 根包为 `com.nebysse.minetomesh`。客户端与服务端必须使用同一版本。
+The 1.2.0 runtime Mod ID is `minetomesh` and the Java root package is `com.nebysse.minetomesh`. Client and server must run the same version.
 
-## 导出魔杖
+## Export Wand
 
-可从 MineToMesh 创造模式页签获取，配方为：
+Obtain it from the MineToMesh creative tab. The recipe is:
 
 ```text
   A
@@ -38,90 +38,126 @@ MineToMesh 是面向 Minecraft 1.21.1 NeoForge 的世界导出模组，将客户
 S  
 ```
 
-- `A`：紫水晶碎片
-- `R`：红石
-- `C`：铜锭
-- `S`：木棍
+- `A`: Amethyst Shard
+- `R`: Redstone
+- `C`: Copper Ingot
+- `S`: Stick
 
-### 操作表
+### Controls
 
-| 输入 | 目标 | 行为 |
+| Input | Target | Behavior |
 |---|---|---|
-| 普通左键 | 方块 | 设置 POS1，阻止方块破坏与裂纹 |
-| 普通右键 | 方块 | 设置 POS2，阻止容器或方块交互 |
-| 普通左键 | 空气 | 设置 POS1 为眼睛沿准星方向前方两格所在的空气方块 |
-| 普通右键 | 空气 | 设置 POS2 为眼睛沿准星方向前方两格所在的空气方块 |
-| Shift+左键 | 方块 | 设置 POS1 |
-| Shift+左键空气 | 空气 | 清除该魔杖的 POS1/POS2，保留名称和 Overlay 偏好 |
-| Shift+右键 | 方块或空气 | 打开导出 GUI |
+| Plain left click | Block | Sets POS1; block breaking and crack animation are blocked |
+| Plain right click | Block | Sets POS2; container and block interactions are blocked |
+| Plain left click | Air | Sets POS1 to the air block two blocks ahead of the eyes along the crosshair direction |
+| Plain right click | Air | Sets POS2 to the air block two blocks ahead of the eyes along the crosshair direction |
+| Shift + left click | Block | Sets POS1 |
+| Shift + left click | Air | Clears this wand's POS1/POS2 while keeping its name and Overlay preference |
+| Shift + right click | Block or air | Opens the export GUI |
 
-取点、清除和打开菜单仅播放声音反馈。跨维度设置端点会被拒绝，并保留原选区。
+Setting points, clearing and opening the menu only play sound feedback. Setting an endpoint in a different dimension is rejected and the existing selection is kept.
 
-### GUI 与 Overlay
+### GUI and Overlay
 
-- GUI 可直接编辑 POS1/POS2 的 X/Y/Z；回车或失焦提交完整端点。
-- 步进按钮和滚轮为 `±1`，`Shift+滚轮` 为 `±10`。
-- 导出名支持 Unicode；中英文通过 `charTyped` 进入聚焦输入框，在回车或失焦时写回当前魔杖，关闭重开仍保留。
-- GUI 打开时消费 E、WASD、数字热栏键及模组快捷键；Esc 关闭，Enter 仅提交当前字段，Tab 仅切换焦点，关闭后游戏快捷键立即恢复。
-- GUI 提供三个互不耦合的开关：`手持预览`、`锁定选区`、`导出玩家`。手持预览控制当前魔杖 Overlay；锁定选区控制客户端持久框；导出玩家只影响导出内容。
-- Overlay 为橙色半透明体积与蓝色深度遮挡边线。手持预览需要对应魔杖仍在主手或副手；锁定选区无需继续持有魔杖。
-- 点击锁定选区会直接读取 GUI 中六个坐标。首次点击保存；选择不同区域后点击会替换旧锁定；当前坐标与锁定相同时再次点击会解除锁定。
-- 锁定记录写入 `.minecraft/config/minetomesh/locked-selections.json`，支持跨重启恢复，并按存档或服务器隔离。记录只含 SHA-256 Profile 键，不保存原始服务器地址；锁定状态不写入魔杖组件，也不发送新的服务端网络载荷。
-- 锁定区域在维度不匹配时隐藏，返回原维度后恢复；切换世界或服务器只切换 Profile，不删除其他 Profile 的记录。损坏的配置会隔离为 `locked-selections.json.corrupt-*`，客户端继续使用空记录启动。
-- GUI 打开期间移动、替换或移除绑定魔杖会使菜单失效；正在进行的 GUI 导出随之取消。
+- The GUI edits the X/Y/Z of POS1/POS2 directly; Enter or losing focus commits the complete endpoint.
+- The step buttons and the mouse wheel change a value by `±1`; `Shift + wheel` changes it by `±10`.
+- The export name supports Unicode: both Latin and CJK text enter the focused input box through `charTyped`, are written back to the current wand on Enter or focus loss, and persist after closing and reopening.
+- While the GUI is open it consumes E, WASD, the number hotbar keys and mod hotkeys. Esc closes it, Enter only commits the current field, Tab only moves focus, and game hotkeys are restored immediately after closing.
+- The GUI has three independent toggles: `Preview`, `Lock` and `Players`. `Preview` (hand preview) controls the current wand's Overlay; `Lock` (lock selection) controls the persistent client-side box; `Players` (export players) only affects what is exported.
+- The Overlay is an orange translucent volume with blue depth-occluded edge lines. Hand preview requires the matching wand to remain in the main hand or off hand; a locked selection does not require holding the wand.
+- Clicking `Lock` reads the six coordinates directly from the GUI. The first click saves the selection; clicking after choosing a different region replaces the old lock; clicking again while the current coordinates equal the locked ones removes the lock.
+- Lock records are written to `.minecraft/config/minetomesh/locked-selections.json`, are restored across restarts, and are isolated per save or server. A record only contains a SHA-256 profile key and never stores the raw server address; the lock state is not written to the wand component and no new server network payload is sent.
+- A locked region is hidden when the dimension does not match and restored when you return to the original dimension. Switching world or server only switches the profile and never deletes other profiles' records. A corrupted config is quarantined as `locked-selections.json.corrupt-*` and the client keeps starting with empty records.
+- Moving, replacing or removing the bound wand while the GUI is open invalidates the menu, and any GUI export in progress is cancelled with it.
 
-### 权限与导出生命周期
+### Permissions and export lifecycle
 
-- 单人模式允许本地玩家导出。
-- 专用服务器要求权限等级 2 或更高，普通玩家仍可取点和编辑魔杖，但不能启动客户端导出。
-- 点击导出后，服务端从当前菜单绑定的物品重新读取 UUID、选区、维度和导出名，并返回不可变快照。
-- 客户端只接受与当前 `wandId` 和维度匹配的授权；退出世界只清理 Controller 状态，网络回调在进程生命周期内保持安装。
-- 导出期间关闭 GUI 会取消任务并清理事务目录；正常完成的结果不会因关闭 GUI 被删除。
+- Singleplayer lets the local player export.
+- A dedicated server requires permission level 2 or higher. Ordinary players can still set points and edit the wand, but cannot start a client export.
+- After Export is clicked, the server re-reads the UUID, selection, dimension and export name from the item currently bound to the menu and returns an immutable snapshot.
+- The client only accepts grants that match the current `wandId` and dimension. Leaving the world only clears the controller state; the network callbacks stay installed for the lifetime of the process.
+- Closing the GUI during an export cancels the job and cleans up the transaction directory; a result that completed normally is not deleted by closing the GUI.
 
-## 0.5.1 硬迁移警告
+## Sable compatibility (`/minetomesh sable`)
 
-0.5.1 将旧 Mod ID `mcgltf` 完整迁移为 `minetomesh`，不提供 Missing Mapping、旧资源兼容壳或 `/mcgltf` 命令别名，因此**不兼容旧存档**中的旧注册项和旧魔杖数据。升级前请备份世界；旧魔杖不会转换为新身份下的魔杖。
+MineToMesh can export a region from a Sable world, including structures that Sable keeps inside sub-levels (for example ships and contraptions), as an OBJ file with an MTL material file. It reuses the selection of the Sable blueprint tool instead of the Export Wand, and every integration is optional and reached by reflection, so MineToMesh still loads normally without Sable.
 
-旧 `.minecraft/mcgltf-exports/` 目录不会被移动或删除，新导出统一写入 `.minecraft/minetomesh-exports/`。需要旧结果时可直接从旧目录读取。0.5.0 对区域导出工作台的硬删除仍然有效，旧工作台也不会恢复或转换。
+**Setup**
 
-## 指令备用入口
+1. Install **Sable Photomancy** (mod id `sable_schematic_api`) and **LDLib2**.
+2. Install MineToMesh on the client as usual (see [Installation](#installation)). Flywheel is optional.
+
+**Exporting a ship or structure**
+
+1. With the Photomancy blueprint tool in library mode, left-click two opposite corners around your ship. Keep the selection at or below 64 × 64 × 64 blocks (131,072 blocks).
+2. Run:
+
+   ```text
+   /minetomesh sable myship
+   ```
+
+3. Find the result in `.minecraft/minetomesh-exports/myship/`:
+
+   ```text
+   myship.obj      geometry, one object per coordinate space (`world`, `sub01_myship`, ...)
+   myship.mtl      one material per render type, all pointing at the atlas image
+   textures/*.png  the block atlas (and any entity sheet a renderer named), read back from the GPU
+   ```
+
+Notes:
+
+- The selection is the two corners set by left-clicking in the tool's library mode; Shift + left click clears it. It is client-side state, so it is empty after a blueprint is saved.
+- The command refuses with a reason in the log (`no-selection`, `one-corner`, `too-large`, `unsafe-name`) instead of exporting an empty or oversized box.
+- The ordinary world and every Sable sub-level intersecting the selection each become their own OBJ object, positioned correctly even when the sub-level is rotated.
+- Parts that Flywheel draws as instances (cannons, encased cogwheels, bearings and similar) are recovered by temporarily switching Flywheel to its CPU fallback during capture; if Flywheel is absent, nothing extra is needed.
+- Only blocks and block entities are exported (no entities), and OBJ carries no per-block tint, so grass, leaves and water come out untinted.
+- See `src/main/java/com/nebysse/minetomesh/sable/README-SABLE-EXPORT.md` for the full technical description and the log lines that explain each export.
+
+## 0.5.1 hard migration warning
+
+Version 0.5.1 fully migrated the old Mod ID `mcgltf` to `minetomesh`. It provides no Missing Mapping, no legacy resource shim and no `/mcgltf` command alias, so it is **not compatible with old saves** that contain old registry entries and old wand data. Back up your world before upgrading; old wands are not converted into wands under the new identity.
+
+The old `.minecraft/mcgltf-exports/` directory is not moved or deleted, and new exports are always written to `.minecraft/minetomesh-exports/`. If you need old results, read them directly from the old directory. The hard removal of the region export workstation in 0.5.0 still applies; the old workstation is neither restored nor converted.
+
+## Command fallback
 
 ```text
 /minetomesh pos1
 /minetomesh pos2
-/minetomesh export <名称>
-/minetomesh export <名称> confirm
+/minetomesh export <name>
+/minetomesh export <name> confirm
 /minetomesh status
 /minetomesh cancel
+/minetomesh sable <name>
 ```
 
-`/minetomesh` 是无需魔杖的备用入口，不保留旧命令别名。超过软限制 4,194,304 格时，需要执行聊天中给出的 `confirm` 指令。
+`/minetomesh` is a fallback entry point that needs no wand, and no legacy command alias is kept. When a selection exceeds the soft limit of 4,194,304 blocks, you must run the `confirm` command shown in chat. `/minetomesh sable <name>` is the Sable region export described above.
 
-## 输出
+## Output
 
-输出根目录为 `.minecraft/minetomesh-exports/`：
+The output root is `.minecraft/minetomesh-exports/`:
 
 ```text
-minetomesh-exports/<名称>/
-├─ <名称>.gltf
-├─ <名称>.bin
-├─ <名称>.usda
+minetomesh-exports/<name>/
+├─ <name>.gltf
+├─ <name>.bin
+├─ <name>.usda
 ├─ report.json
 ├─ textures/
 └─ materials/
 ```
 
-同名目录自动使用 `名称-2`、`名称-3` 等后缀。捕获采用滚动快照，每客户端 Tick 预算约 6 ms，后台写入队列容量为 2。
+A directory with the same name automatically gets a suffix such as `name-2` or `name-3`. Capture uses rolling snapshots with a budget of about 6 ms per client tick, and the background write queue has a capacity of 2.
 
-## Blender 导入
+## Importing into Blender
 
-在 Blender 5.2 中选择“文件 → 导入 → glTF 2.0”打开 `.gltf`；需要保留 Quad 时，选择“文件 → 导入 → Universal Scene Description”打开 `.usda`。保持 `.gltf`、`.bin`、`.usda` 与 `textures/` 的相对目录不变。USDA 舞台为 Y-Up、`metersPerUnit = 1`，Blender 导入时完成 Y-up 到 Z-up 的轴旋转。PreviewSurface 对 Cutout、Blend、顶点 Tint 和发光的呈现受 Blender USD 导入器能力影响，复杂材质仍建议导入后人工检查。
+In Blender 5.2 choose "File → Import → glTF 2.0" to open the `.gltf`; when you need to keep quads, choose "File → Import → Universal Scene Description" to open the `.usda`. Keep the relative layout of `.gltf`, `.bin`, `.usda` and `textures/` unchanged. The USDA stage is Y-Up with `metersPerUnit = 1`, and Blender performs the Y-up to Z-up axis rotation on import. How PreviewSurface renders Cutout, Blend, vertex tint and emission depends on the Blender USD importer, so complex materials should still be checked manually after import.
 
-1.2.0 不再生成 OBJ/MTL，也不提供兼容开关。成功或取消导出后不应残留 `.usdapart` 临时片段。
+Version 1.2.0 no longer generates OBJ/MTL for the standard export and offers no compatibility switch. No `.usdapart` temporary fragments should remain after a successful or cancelled export.
 
-Flywheel 1.x 等受支持后端会在捕获期间临时进入 CPU 备用渲染作用域，并在 `finally` 路径恢复。纯着色器生成且没有 CPU 几何的对象无法逆向恢复，会生成半透明洋红包围盒并记录诊断码。阴影、火焰、名称文本、Minecraft 光照和 AO 不会烘焙。
+Supported backends such as Flywheel 1.x temporarily enter a CPU fallback rendering scope during capture and are restored on the `finally` path. Objects generated purely by shaders with no CPU geometry cannot be recovered; they produce a translucent magenta bounding box and a diagnostic code is recorded. Shadows, fire, name text, Minecraft lighting and AO are not baked.
 
-## 构建与验证
+## Build and verification
 
 ```powershell
 ./gradlew.bat clean test build
@@ -131,8 +167,8 @@ npm install
 npm run validate -- ..\run\minetomesh-exports\smoke\smoke.gltf
 ```
 
-真实模组验收建议使用 Create 6.0.10、Flywheel 1.0.6 与 Touhou Little Maid 1.5.3，分别把 glTF 与 USDA 导入 Blender 5.2，对比原点、尺度、材质、UV、Quad 拓扑和 Powered Rail 叠层，并用 Khronos Validator 要求 glTF `numErrors: 0`。
+For real-mod acceptance testing, use Create 6.0.10, Flywheel 1.0.6 and Touhou Little Maid 1.5.3: import both the glTF and the USDA into Blender 5.2, compare origin, scale, materials, UVs, quad topology and the Powered Rail layering, and require `numErrors: 0` from the Khronos Validator for the glTF.
 
-## 许可证
+## License
 
-MIT，详见 [LICENSE](LICENSE)。
+MIT, see [LICENSE](LICENSE).

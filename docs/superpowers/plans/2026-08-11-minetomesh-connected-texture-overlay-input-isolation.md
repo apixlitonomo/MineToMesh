@@ -1140,14 +1140,14 @@ Make these exact documentation changes:
 Add rows:
 
 ```markdown
-| Create 连纹 | 拼接安山机壳、黄铜机壳、储液罐和保险库 | 游戏与 Blender 中边、角、中心纹理一致，不退回单块重复 |
-| 草侧 Overlay 对象 | 导出跨多个 Section 的草地区域 | Outliner 只有一个 `selection/grass_side_overlay`；隐藏后只剩底层侧面 |
-| 英文 E 输入 | 名称框输入 `create_export` | 字符正常进入名称，GUI 不关闭，物品栏不弹出 |
-| 中文输入法 | 名称框输入中文并提交 | 中文名称保存并用于输出目录，快捷键不泄漏 |
-| 关闭后恢复 | Esc 关闭 GUI 后按 E、WASD、1 至 9 | 游戏快捷键立即恢复，无粘滞状态 |
+| Create connected textures | Join andesite casings, brass casings, fluid tanks and vaults | Edge, corner and center textures match between the game and Blender, and do not fall back to repeating a single block |
+| Grass side Overlay object | Export a grass area spanning several Sections | The Outliner shows a single `selection/grass_side_overlay`; only the base side faces remain when it is hidden |
+| Latin E input | Type `create_export` in the name box | The characters enter the name normally, the GUI does not close, and the inventory does not open |
+| CJK input method | Type Chinese text in the name box and commit | The Chinese name is saved and used for the output directory, and no hotkeys leak |
+| Restore after close | Press E, WASD and 1 to 9 after closing the GUI with Esc | Game hotkeys are restored immediately with no sticky state |
 ```
 
-Clearly label these rows “项目所有者人工视觉/交互验收”，not automated pass criteria.
+Clearly label these rows “project-owner manual visual/interaction acceptance”, not automated pass criteria.
 
 - [ ] **Step 3: Run documentation policy tests**
 

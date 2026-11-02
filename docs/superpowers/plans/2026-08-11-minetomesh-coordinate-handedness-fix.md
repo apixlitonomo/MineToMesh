@@ -508,7 +508,7 @@ git commit -m "fix: preserve OBJ source winding"
 In `DocumentationPolicyTest.readmeDocumentsTheWandReleaseAndMigration`, add these required fragments:
 
 ```java
-"不执行轴反射",
+"performs no axis reflection",
 "Minecraft `+X` → Blender `+X`",
 "Minecraft `+Y` → Blender `+Z`",
 "Minecraft `+Z` → Blender `-Y`"
@@ -523,7 +523,7 @@ assertFalse(readme.contains("(X,Y,Z) → (X,Y,-Z)"));
 In `manualMatrixCoversTheExactWandClosure`, add:
 
 ```java
-"非对称坐标方位"
+"Asymmetric coordinate orientation"
 ```
 
 - [ ] **Step 2: Run the documentation test and verify it fails**
@@ -539,22 +539,22 @@ Expected: assertion failures for the new coordinate wording and manual-matrix ro
 Replace:
 
 ```text
-- 坐标转换为 `(X,Y,Z) → (X,Y,-Z)`，选区最小点为局部原点，一格对应 Blender 一米。
+- Coordinates are converted as `(X,Y,Z) → (X,Y,-Z)`, with the minimum corner of the selection as the local origin and one block equal to one Blender meter.
 ```
 
 with:
 
 ```text
-- 坐标以选区最小点为局部原点，一格对应 Blender 一米；导出空间保留 Minecraft 的 `(X,Y,Z)` 相对方向，不执行轴反射。
-- Blender 导入 glTF 后执行 Y-up 到 Z-up 的轴旋转：Minecraft `+X` → Blender `+X`、Minecraft `+Y` → Blender `+Z`、Minecraft `+Z` → Blender `-Y`。
+- Coordinates use the minimum corner of the selection as the local origin, and one block equals one Blender meter; the export space keeps Minecraft's relative `(X,Y,Z)` orientation and performs no axis reflection.
+- After Blender imports the glTF it rotates from Y-up to Z-up: Minecraft `+X` → Blender `+X`, Minecraft `+Y` → Blender `+Z`, Minecraft `+Z` → Blender `-Y`.
 ```
 
 - [ ] **Step 4: Add the manual Blender handedness row**
 
-Under `文件与 Blender 闭环` in `docs/testing/manual-client-matrix.md`, add:
+Under `Files and the Blender loop` in `docs/testing/manual-client-matrix.md`, add:
 
 ```markdown
-| 非对称坐标方位 | 在选区东侧放金块、西侧放钻石块，分别导入 glTF 与 OBJ | 两种格式均无镜像；Minecraft +X 对应 Blender +X，材质、法线和正面方向正确 |
+| Asymmetric coordinate orientation | Place a gold block on the east side and a diamond block on the west side of the selection, then import both glTF and OBJ | Neither format is mirrored; Minecraft +X maps to Blender +X, and materials, normals and front-face direction are correct |
 ```
 
 - [ ] **Step 5: Run documentation and focused geometry tests**

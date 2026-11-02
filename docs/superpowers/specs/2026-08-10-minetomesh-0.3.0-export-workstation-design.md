@@ -1,55 +1,55 @@
-# MineToMesh 0.3.0 区域导出工作台设计
+# MineToMesh 0.3.0 Region Export Workstation Design
 
-日期：2026-08-10  
-状态：设计已逐节确认，待书面规格复核  
-目标版本：0.3.0  
-Minecraft：1.21.1  
-NeoForge：最低 21.1.244
+Date: 2026-08-10  
+Status: design confirmed section by section, awaiting written specification review  
+Target version: 0.3.0  
+Minecraft: 1.21.1  
+NeoForge: minimum 21.1.244
 
-## 1. 目标
+## 1. Goals
 
-MineToMesh 0.3.0 新增一个可放置、可合成、带持久化选区的“区域导出工作台”。玩家右键方块后打开完整 GUI，通过两个三维整数坐标编辑选区，观察选区体积，并从客户端启动现有 glTF 与 OBJ 导出管线。
+MineToMesh 0.3.0 adds a placeable, craftable "Region Export Workstation" with a persistent selection. After right-clicking the block the player opens a full GUI, edits the selection through two three-dimensional integer coordinates, observes the selection volume, and starts the existing glTF and OBJ export pipeline from the client.
 
-本版本同时把模组从纯客户端模组调整为客户端与服务端均需安装的双端模组。服务端负责方块、选区、菜单、权限校验和多人同步；渲染捕获、纹理读取与文件写入仍只在发起操作的玩家客户端执行。
+This version also changes the mod from a pure client-side mod to a dual-side mod that must be installed on both client and server. The server is responsible for the block, the selection, the menu, permission validation and multiplayer synchronization; render capture, texture reading and file writing are still performed only on the client of the player who started the action.
 
-## 2. 已确认的产品决策
+## 2. Confirmed product decisions
 
-- 选区数据属于操作方块，不属于玩家。
-- 每个工作台保存一组起点和终点，所有玩家共享。
-- 坐标支持手动输入、上下按钮、鼠标滚轮和脚下取点。
-- 上下按钮固定调整 `±1`。
-- 悬停输入框时滚轮调整 `±1`，`Shift + 滚轮` 调整 `±10`。
-- 选区显示可在 GUI 中切换，关闭 GUI 后仍可持续显示。
-- 选区使用橙色半透明体积表面和蓝色纵深辅助边线。
-- 选区遵守正常深度遮挡，不穿墙显示。
-- GUI 关闭时立即取消仍在进行的导出并清理事务目录。
-- 游戏内报告只显示摘要，完整诊断继续写入 `report.json`。
-- 导出名默认自动生成，玩家可以在 GUI 中修改，但不写入方块实体。
-- 工作台可在创造模式获得，也提供生存配方。
-- 不设置选区体积上限。
-- 保留现有 `/mcgltf` 客户端命令。
-- 视觉使用 Blender 致敬配色：橙色、蓝色、深灰和中灰。
-- GUI 采用双栏仪表台与轻倒角，信息层级参考 Create，但不依赖或复制 Create 的代码和素材。
-- 方块为有明确水平朝向的工业设备，正面图标是蓝色正交线框立方体与从内部向右上射出的橙色小箭头。
-- 方块最终纹理使用原生 `16×16` 分辨率。
+- Selection data belongs to the operated block, not to the player.
+- Each workstation stores one start point and one end point, shared by all players.
+- Coordinates support manual input, up/down buttons, the mouse wheel and feet-position picking.
+- The up/down buttons always adjust by `±1`.
+- Hovering an input box, the wheel adjusts by `±1`, and `Shift + wheel` adjusts by `±10`.
+- The selection display can be toggled in the GUI and keeps showing after the GUI is closed.
+- The selection uses orange translucent volume surfaces and blue depth auxiliary edge lines.
+- The selection follows normal depth occlusion and is not shown through walls.
+- Closing the GUI immediately cancels an export in progress and cleans up the transaction directory.
+- The in-game report shows only a summary; the full diagnostics are still written to `report.json`.
+- The export name is generated automatically by default, and the player can change it in the GUI, but it is not written into the block entity.
+- The workstation is obtainable in creative mode and also has a survival recipe.
+- No upper limit is placed on the selection volume.
+- The existing `/mcgltf` client command is kept.
+- The visuals use a Blender-tribute palette: orange, blue, dark gray and mid gray.
+- The GUI uses a two-column dashboard with light bevels; the information hierarchy references Create, but neither depends on nor copies Create's code and assets.
+- The block is an industrial device with a clear horizontal facing, and its front icon is a blue orthographic wireframe cube with a small orange arrow shooting from the inside toward the upper right.
+- The final block textures use the native `16×16` resolution.
 
-## 3. 范围外内容
+## 3. Out of scope
 
-0.3.0 不实现以下功能：
+0.3.0 does not implement the following:
 
-- 服务端渲染捕获或服务端文件导出。
-- 世界点选工具、魔杖或 WorldEdit 式左右键选点。
-- 完整游戏内诊断浏览器、日志筛选、复制日志或打开系统目录。
-- HUD 常驻进度条。
-- 导出暂停、恢复或断线续传。
-- 工作台物品栏、红石控制、动态发光或动态方块模型。
-- 选区体积软警告、二次确认或硬上限。
-- Create 模组运行时依赖。
-- 对 0.2.0 捕获后端、双格式拓扑和纹理兼容策略的重新设计。
+- Server-side render capture or server-side file export.
+- A world point-picking tool, a wand or WorldEdit-style left/right-click point picking.
+- A full in-game diagnostics browser, log filtering, log copying or opening the system directory.
+- A persistent HUD progress bar.
+- Export pause, resume or reconnection resume.
+- A workstation inventory, redstone control, dynamic emission or dynamic block models.
+- A soft warning, second confirmation or hard limit on selection volume.
+- A runtime dependency on the Create mod.
+- A redesign of the 0.2.0 capture backend, the dual-format topology and the texture compatibility policy.
 
-## 4. 总体架构
+## 4. Overall architecture
 
-采用 NeoForge `AbstractContainerMenu`、`BlockEntity` 与显式 `CustomPacketPayload` 组合。
+NeoForge `AbstractContainerMenu`, `BlockEntity` and explicit `CustomPacketPayload`s are combined.
 
 ```text
 ExportWorkstationBlock
@@ -58,30 +58,30 @@ ExportWorkstationBlock
        └─ second: BlockPos
 
 Server ExportWorkstationMenu
-  ├─ 校验方块身份与玩家距离
-  ├─ 同步六个坐标整数
-  ├─ 接收合法编辑
-  └─ 生成不可变导出快照
+  ├─ validates block identity and player distance
+  ├─ synchronizes the six coordinate integers
+  ├─ receives legal edits
+  └─ produces an immutable export snapshot
 
 Client ExportWorkstationScreen
-  ├─ 坐标编辑与本地输入校验
-  ├─ 导出名编辑
-  ├─ ExportTelemetry 展示
-  └─ 摘要报告展示
+  ├─ coordinate editing and local input validation
+  ├─ export name editing
+  ├─ ExportTelemetry display
+  └─ summary report display
 
 Client WorkstationExportController
-  ├─ 接收服务端授权快照
-  ├─ 创建 DefaultExportPipeline
-  ├─ 桥接 ExportJobManager
-  └─ 关闭 GUI 时取消任务
+  ├─ receives the server authorization snapshot
+  ├─ creates DefaultExportPipeline
+  ├─ bridges ExportJobManager
+  └─ cancels the job when the GUI closes
 
 Client SelectionOverlayRenderer
-  └─ 绘制当前玩家已启用的工作台选区
+  └─ draws the workstation selection currently enabled for the player
 ```
 
-### 4.1 包边界
+### 4.1 Package boundaries
 
-新增以下包：
+The following packages are added:
 
 ```text
 com.onecuber.mcgltf.content
@@ -90,63 +90,63 @@ com.onecuber.mcgltf.network
 com.onecuber.mcgltf.client.workstation
 ```
 
-`content` 只负责注册表入口；`workstation` 包含双端安全的方块、方块实体、菜单和值对象；`network` 包含 Payload 与服务端处理；`client.workstation` 包含 Screen、控件、选区渲染和客户端导出控制器。
+`content` is only responsible for registry entry points; `workstation` holds the dual-side-safe block, block entity, menu and value objects; `network` holds the payloads and server handling; `client.workstation` holds the Screen, widgets, selection rendering and the client export controller.
 
-服务端可达类不得静态引用 `Minecraft`、`GuiGraphics`、渲染器、客户端纹理或现有客户端捕获类。
+Classes reachable from the server must not statically reference `Minecraft`, `GuiGraphics`, renderers, client textures or the existing client capture classes.
 
-## 5. 工作台方块与持久化
+## 5. Workstation block and persistence
 
-### 5.1 方块
+### 5.1 Block
 
-`ExportWorkstationBlock` 使用水平朝向属性。放置时正面背向放置玩家的视线方向，使带图标的操作面朝向玩家。右键空手或持有普通物品均打开菜单，不消费手中物品。
+`ExportWorkstationBlock` uses a horizontal facing property. When placed, the front faces away from the placing player's line of sight, so that the face with the icon points toward the player. Right-clicking with an empty hand or any ordinary item opens the menu, and the item in hand is not consumed.
 
-属性：
+Properties:
 
-- 金属音效。
-- 硬度 `3.0`。
-- 爆炸抗性 `6.0`。
-- 需要正确镐类工具。
-- 无物品栏。
-- 无红石输入与输出。
-- 无动态 `LIT` 状态。
+- Metal sounds.
+- Hardness `3.0`.
+- Blast resistance `6.0`.
+- Requires the correct pickaxe-type tool.
+- No inventory.
+- No redstone input or output.
+- No dynamic `LIT` state.
 
-玩家距离工作台超过八格、方块被拆除或原位置不再是同类型工作台时，`stillValid` 返回 false 并关闭菜单。
+When the player is more than eight blocks from the workstation, the block is removed, or the original position is no longer the same type of workstation, `stillValid` returns false and closes the menu.
 
-### 5.2 方块实体
+### 5.2 Block entity
 
-`ExportWorkstationBlockEntity` 保存两个 `BlockPos`。首次放置时，两点均初始化为方块自身坐标。维度不重复写入 NBT，始终使用方块实体所在世界的维度。
+`ExportWorkstationBlockEntity` stores two `BlockPos`. On first placement both points are initialized to the block's own coordinates. The dimension is not written into the NBT again and always uses the dimension of the world the block entity is in.
 
-NBT 字段固定为：
+The NBT fields are fixed as:
 
 ```text
 First: int[3]
 Second: int[3]
 ```
 
-读取损坏或缺失字段时回退为工作台自身坐标。保存和读取均复制值，不暴露可变数组。
+When a field is corrupted or missing on read, it falls back to the workstation's own coordinates. Saving and reading both copy values and never expose mutable arrays.
 
-坐标变化后：
+After a coordinate changes:
 
-1. 更新方块实体。
-2. 调用 `setChanged()`。
-3. 通知当前打开的菜单同步。
-4. 发送仅包含六个坐标整数的方块实体更新包给区块追踪客户端。
+1. Update the block entity.
+2. Call `setChanged()`.
+3. Notify the currently open menu to synchronize.
+4. Send a block-entity update packet containing only the six coordinate integers to the clients tracking the chunk.
 
-多人同时编辑时，服务端按合法 Payload 到达顺序提交，最后一次提交生效。
+When several players edit at the same time, the server commits legal payloads in order of arrival and the last commit wins.
 
-## 6. 注册与内容资源
+## 6. Registration and content resources
 
-统一注册：
+Unified registration:
 
-- `export_workstation` Block。
-- `export_workstation` BlockItem。
-- `export_workstation` BlockEntityType。
-- `export_workstation` MenuType。
-- MineToMesh CreativeModeTab。
+- The `export_workstation` Block.
+- The `export_workstation` BlockItem.
+- The `export_workstation` BlockEntityType.
+- The `export_workstation` MenuType.
+- The MineToMesh CreativeModeTab.
 
-创造页签使用工作台方块作为图标。
+The creative tab uses the workstation block as its icon.
 
-生存配方：
+Survival recipe:
 
 ```text
 I G I
@@ -154,28 +154,28 @@ R C R
 I I I
 ```
 
-- `I`：Iron Ingot
-- `G`：Glass Pane
-- `R`：Redstone
-- `C`：Cartography Table
+- `I`: Iron Ingot
+- `G`: Glass Pane
+- `R`: Redstone
+- `C`: Cartography Table
 
-产出一个 `export_workstation`。
+It produces one `export_workstation`.
 
-资源包括方块状态、水平朝向模型、物品模型、战利品表、镐标签、配方及 `zh_cn`、`en_us` 本地化。
+Resources include the block state, a horizontally oriented model, the item model, the loot table, the pickaxe tag, the recipe and the `zh_cn` and `en_us` localizations.
 
-## 7. Menu 与网络协议
+## 7. Menu and network protocol
 
 ### 7.1 Menu
 
-`ExportWorkstationMenu` 不包含物品槽。客户端构造器通过 `IContainerFactory` 接收工作台 `BlockPos`；服务端构造器持有 `ContainerLevelAccess` 与方块实体数据引用。
+`ExportWorkstationMenu` contains no item slots. The client constructor receives the workstation `BlockPos` through `IContainerFactory`; the server constructor holds a `ContainerLevelAccess` and a reference to the block entity data.
 
-六个坐标整数通过 `ContainerData` 同步。NeoForge 1.21.1 提供完整整数同步，不按原版短整数截断。
+The six coordinate integers are synchronized through `ContainerData`. NeoForge 1.21.1 provides full integer synchronization and does not truncate to vanilla short integers.
 
-### 7.2 Payload
+### 7.2 Payloads
 
-协议使用固定版本字符串并注册在 `RegisterPayloadHandlersEvent`。
+The protocol uses a fixed version string and is registered in `RegisterPayloadHandlersEvent`.
 
-建议 Payload：
+Proposed payloads:
 
 - `UpdateCoordinatePayload(stationPos, endpoint, axis, value)`
 - `CaptureFeetPayload(stationPos, endpoint)`
@@ -183,64 +183,64 @@ I I I
 - `ExportGrantedPayload(stationPos, exportName, first, second, dimension)`
 - `ExportRejectedPayload(stationPos, reasonKey)`
 
-所有 C2S 处理在服务端主线程执行，并校验：
+All C2S handling runs on the server main thread and validates:
 
-- 玩家当前打开的是 `ExportWorkstationMenu`。
-- 菜单绑定位置等于 Payload 位置。
-- 原位置仍为工作台。
-- 玩家仍在八格交互距离内。
-- 坐标是合法 `BlockPos`，Y 位于当前维度构建高度内。
-- 导出名通过现有 `ExportName` 安全规则且不超过 64 个字符。
+- The player currently has an `ExportWorkstationMenu` open.
+- The menu's bound position equals the payload position.
+- The original position is still a workstation.
+- The player is still within the eight-block interaction distance.
+- The coordinates are a legal `BlockPos`, with Y within the current dimension's build height.
+- The export name passes the existing `ExportName` safety rules and is no longer than 64 characters.
 
-非法请求只返回本地化拒绝原因，不断开玩家连接。
+An illegal request only returns a localized rejection reason and does not disconnect the player.
 
-“记录脚下方块”由服务端根据 `ServerPlayer` 当前坐标计算，不信任客户端提交的玩家位置。
+"Record the block at my feet" is computed by the server from the `ServerPlayer`'s current coordinates and does not trust a player position submitted by the client.
 
-### 7.3 不可变导出快照
+### 7.3 Immutable export snapshot
 
-服务端通过验证后规范化两点，生成包含维度、起点、终点和导出名的不可变快照，再发送给发起玩家。客户端只能在维度仍匹配且绑定 Screen 仍打开时启动导出。
+After validation passes, the server normalizes the two points, produces an immutable snapshot containing the dimension, start point, end point and export name, and sends it to the player who started the action. The client may start the export only when the dimension still matches and the bound Screen is still open.
 
-导出启动后，其他玩家对工作台坐标的修改不会改变已经运行的任务。
+After the export has started, modifications of the workstation coordinates by other players do not change the job already running.
 
-## 8. GUI 规格
+## 8. GUI specification
 
-### 8.1 视觉
+### 8.1 Visuals
 
-Screen 逻辑尺寸固定为 `384×216` GUI 像素：
+The Screen's logical size is fixed at `384×216` GUI pixels:
 
-- 顶部标题栏：`x=0, y=0, width=384, height=20`。
-- 左栏：`x=4, y=24, width=208, height=166`。
-- 右栏：`x=216, y=24, width=164, height=166`。
-- 底部日志栏：`x=4, y=194, width=376, height=18`。
-- 四周外边距和栏间距均为 `4` GUI 像素。
+- Top title bar: `x=0, y=0, width=384, height=20`.
+- Left column: `x=4, y=24, width=208, height=166`.
+- Right column: `x=216, y=24, width=164, height=166`.
+- Bottom log bar: `x=4, y=194, width=376, height=18`.
+- The outer margin and the gap between columns are both `4` GUI pixels.
 
-配色职责：
+Color responsibilities:
 
-- 橙色：主操作、起点、活动选择。
-- 蓝色：终点、进度、辅助状态。
-- 深灰和中灰：窗口、面板、输入框与结构背景。
+- Orange: primary actions, the start point, the active selection.
+- Blue: the end point, progress, auxiliary status.
+- Dark gray and mid gray: windows, panels, input boxes and structural background.
 
-倒角范围：
+Bevel ranges:
 
-- 外框倒角半径：`5` GUI 像素。
-- 主面板与主按钮倒角半径：`4` GUI 像素。
-- 输入框、小按钮与日志栏倒角半径：`2` GUI 像素。
+- Outer frame bevel radius: `5` GUI pixels.
+- Main panel and main button bevel radius: `4` GUI pixels.
+- Input box, small button and log bar bevel radius: `2` GUI pixels.
 
-Minecraft 实现使用整数坐标与 nearest filtering，不直接照搬网页 CSS 半像素或浏览器抗锯齿。
+The Minecraft implementation uses integer coordinates and nearest filtering, and does not directly copy the half-pixels or browser anti-aliasing of web CSS.
 
-### 8.2 坐标编辑
+### 8.2 Coordinate editing
 
-每个端点包含 X、Y、Z 三个有符号整数输入框。
+Each endpoint has three signed-integer input boxes, X, Y and Z.
 
-- `Enter` 或失去焦点时提交。
-- 上下按钮固定 `±1`。
-- 悬停滚轮 `±1`。
-- `Shift + 滚轮` 为 `±10`。
-- 输入框获得键盘焦点时，滚轮仍可调整，但必须先提交当前可解析文本；不可解析文本保持原样并标红。
-- 合法提交由服务端回传后的值覆盖本地镜像。
-- 非法值不发送 Payload。
+- `Enter` or losing focus commits.
+- The up/down buttons are fixed at `±1`.
+- Hovering wheel `±1`.
+- `Shift + wheel` is `±10`.
+- When an input box has keyboard focus the wheel still adjusts, but the currently parsable text must be committed first; unparsable text stays as is and is marked red.
+- A legal commit is overwritten by the value sent back from the server onto the local mirror.
+- Illegal values send no payload.
 
-范围按包含首尾方块计算：
+The range is computed inclusive of both end blocks:
 
 ```text
 sizeX = abs(x2 - x1) + 1
@@ -249,109 +249,109 @@ sizeZ = abs(z2 - z1) + 1
 volume = sizeX * sizeY * sizeZ
 ```
 
-计算使用溢出安全的 long 运算。0.3.0 不设置体积上限。
+The computation uses overflow-safe long arithmetic. 0.3.0 sets no volume limit.
 
-### 8.3 导出名
+### 8.3 Export name
 
-打开 GUI 时按工作台坐标与当前时间生成默认名称。玩家可以修改；名称不持久化到方块实体。
+When the GUI opens, a default name is generated from the workstation coordinates and the current time. The player can change it; the name is not persisted to the block entity.
 
-非法名称输入框标红，导出按钮禁用。名称最长 64 个字符。
+An illegal name marks the input box red and disables the Export button. The name is at most 64 characters.
 
-### 8.4 状态机
+### 8.4 State machine
 
-Screen 状态：
+Screen states:
 
-1. `READY`：允许编辑与导出。
-2. `INVALID_INPUT`：标记非法输入并禁用导出。
-3. `WAITING_FOR_GRANT`：请求已发送，短暂锁定操作。
-4. `EXPORTING`：锁定坐标和名称，显示进度与取消。
-5. `COMPLETED`：显示摘要，可关闭或开始下一次导出。
-6. `FAILED`：显示简短原因。
-7. `CANCELLED`：显示取消结果，随后允许重新开始。
+1. `READY`: editing and export allowed.
+2. `INVALID_INPUT`: illegal input is marked and export is disabled.
+3. `WAITING_FOR_GRANT`: the request has been sent and operations are briefly locked.
+4. `EXPORTING`: coordinates and name are locked, progress and Cancel are shown.
+5. `COMPLETED`: the summary is shown; the player can close or start the next export.
+6. `FAILED`: a short reason is shown.
+7. `CANCELLED`: the cancellation result is shown, then restarting is allowed.
 
-导出期间关闭 Screen、按 Esc、方块失效或距离过远均取消客户端任务。正常完成后关闭 Screen 不删除结果。
+Closing the Screen during an export, pressing Esc, the block becoming invalid or being too far away all cancel the client job. Closing the Screen after normal completion does not delete the result.
 
-## 9. 选区渲染
+## 9. Selection rendering
 
-选区显示状态属于每名玩家的客户端会话，以维度和工作台位置为键：
+The selection display state belongs to each player's client session and is keyed by dimension and workstation position:
 
 ```text
 OverlayKey(dimension, stationPos)
 ```
 
-行为：
+Behavior:
 
-- GUI 中打开后，关闭 GUI 仍持续显示。
-- 再次打开同一工作台可关闭。
-- 方块实体同步变化时刷新。
-- 方块被拆除、退出世界或切换维度时清除对应显示。
-- 不写入玩家持久配置，也不广播显示开关。
+- Once turned on in the GUI, it keeps showing after the GUI closes.
+- Opening the same workstation again can turn it off.
+- It refreshes when the block entity synchronizes a change.
+- It is cleared when the block is removed, the world is left or the dimension changes.
+- It is not written to the player's persistent config and the display toggle is not broadcast.
 
-渲染只绘制六个边界表面与十二条边：
+Rendering draws only the six boundary surfaces and twelve edges:
 
-- 橙色低 Alpha 表面。
-- 蓝色纵深辅助边线。
-- 开启深度测试和正常深度写入策略，被实体方块遮挡。
-- 不逐方块遍历选区内部。
-- 使用相机相对坐标和当前帧矩阵，避免远坐标精度漂移。
+- Orange low-alpha surfaces.
+- Blue depth auxiliary edge lines.
+- Depth testing and the normal depth-write policy are enabled, so solid blocks occlude it.
+- The selection interior is not traversed block by block.
+- Camera-relative coordinates and the current frame matrices are used to avoid far-coordinate precision drift.
 
-## 10. 导出控制与进度
+## 10. Export control and progress
 
-### 10.1 复用现有管线
+### 10.1 Reusing the existing pipeline
 
-工作台不创建第二套导出器。`WorkstationExportController` 将服务端授权快照交给现有：
+The workstation creates no second exporter. `WorkstationExportController` hands the server authorization snapshot to the existing:
 
 ```text
 DefaultExportPipeline.create(...)
 ExportJobManager.start(...)
 ```
 
-现有客户端命令继续使用相同管线。
+The existing client command continues to use the same pipeline.
 
 ### 10.2 ExportTelemetry
 
-新增线程安全、只读快照式 `ExportTelemetry`，用于 GUI 展示可信的阶段进度。
+A new thread-safe, read-only snapshot-style `ExportTelemetry` shows trustworthy stage progress in the GUI.
 
-整体进度权重：
+Overall progress weights:
 
-- 捕获实体与区段：`0–80%`
-- 清空写入队列：`80–88%`
-- 写入纹理与材质：`88–93%`
-- 完成 glTF 与 OBJ：`93–97%`
-- 写入报告并提交事务：`97–100%`
+- Capturing entities and sections: `0–80%`
+- Draining the write queue: `80–88%`
+- Writing textures and materials: `88–93%`
+- Finishing glTF and OBJ: `93–97%`
+- Writing the report and committing the transaction: `97–100%`
 
-权重表达阶段进度，不宣称字节级精确。进度必须单调不减，并同时显示阶段名、当前对象、队列深度和耗时。
+The weights express stage progress and do not claim byte-level accuracy. Progress must be monotonically non-decreasing and must show the stage name, current object, queue depth and elapsed time together.
 
-### 10.3 摘要
+### 10.3 Summary
 
-完成后产生客户端内存中的 `ExportSummary`：
+After completion a client-memory `ExportSummary` is produced:
 
-- 最终状态。
-- 输出目录。
-- 已捕获对象数量。
-- Primitive 数量。
-- 写入纹理数量。
-- 警告数量。
-- 总耗时。
-- 简短失败原因。
+- The final status.
+- The output directory.
+- The number of captured objects.
+- The number of primitives.
+- The number of written textures.
+- The number of warnings.
+- The total elapsed time.
+- A short failure reason.
 
-游戏内不展示完整诊断列表。完整细节仍位于 `report.json`。报告 schema 只有在实际新增序列化字段时才升级，不为 Screen 内存摘要强制升级。
+The game does not show the full diagnostics list. The full details remain in `report.json`. The report schema is only upgraded when serialized fields are actually added, and is not force-upgraded for the Screen's in-memory summary.
 
-### 10.4 取消
+### 10.4 Cancellation
 
-取消流程：
+Cancellation flow:
 
-1. `ExportJobManager.cancel(reason)`。
-2. 停止后续捕获。
-3. 写入线程接收取消信号。
-4. `OutputTransaction` 删除 staging 目录。
-5. 已经成功提交的旧输出目录不受影响。
+1. `ExportJobManager.cancel(reason)`.
+2. Stop further capture.
+3. The writer thread receives the cancellation signal.
+4. `OutputTransaction` deletes the staging directory.
+5. Old output directories that were already committed successfully are unaffected.
 
-0.3.0 不支持恢复被取消的任务。
+0.3.0 does not support resuming a cancelled job.
 
-## 11. 视觉资产与来源
+## 11. Visual assets and provenance
 
-已确认的设计参考保存在：
+The confirmed design references are stored in:
 
 ```text
 docs/superpowers/design-assets/minetomesh-0.3.0/
@@ -361,22 +361,22 @@ docs/superpowers/design-assets/minetomesh-0.3.0/
   workstation-block-greenkey.png
 ```
 
-这些文件属于设计输入，不直接等同于生产资源。
+These files are design inputs and are not directly equivalent to production resources.
 
-### 11.1 GUI 图集处理
+### 11.1 GUI atlas processing
 
-1. 检查绿幕背景是否严格为 `#00FF00`。
-2. 使用精确颜色键转透明，不采用模糊容差吞噬边缘。
-3. 按矩形切分可复用控件。
-4. 清理近绿色污染、跨素材阴影和非整数像素边缘。
-5. 整理为生产 sprite atlas 与坐标清单。
-6. 文字、数字和动态进度永远由游戏代码绘制。
+1. Check that the green-screen background is strictly `#00FF00`.
+2. Convert to transparent with an exact color key, without a fuzzy tolerance that would eat the edges.
+3. Slice reusable widgets by rectangle.
+4. Clean near-green contamination, cross-asset shadows and non-integer pixel edges.
+5. Organize into a production sprite atlas with a coordinate manifest.
+6. Text, digits and dynamic progress are always drawn by the game code.
 
-若生图素材无法达到像素边缘要求，则只把它作为视觉参考并手工重绘；不得为了“保留生图”牺牲可切片性。
+If generated-image assets cannot reach the pixel-edge requirement, they are used only as visual references and redrawn by hand; sliceability must not be sacrificed to "keep the generated image".
 
-### 11.2 方块纹理处理
+### 11.2 Block texture processing
 
-最终生产纹理固定为：
+The final production textures are fixed as:
 
 ```text
 export_workstation_front.png   16×16
@@ -386,98 +386,98 @@ export_workstation_top.png     16×16
 export_workstation_bottom.png  16×16
 ```
 
-设计规则：
+Design rules:
 
-- 正面：蓝色正交线框立方体和向右上射出的橙色箭头。
-- 侧面：深灰分段机壳、短蓝色状态槽和少量橙色方向标记。
-- 背面：接口、散热格栅和蓝色状态灯。
-- 顶面：无字母的橙蓝正交网格。
-- 底面：耐磨底板、四角固定脚和检修盖。
-- 左上受光，右下压暗。
-- 倒角控制为 1–2 个逻辑像素。
+- Front: a blue orthographic wireframe cube and an orange arrow shooting toward the upper right.
+- Side: a dark gray segmented casing, short blue status slots and a few orange direction marks.
+- Back: ports, a cooling grille and a blue status light.
+- Top: an orange-and-blue orthographic grid with no letters.
+- Bottom: a wear-resistant base plate, four corner feet and a maintenance cover.
+- Lit from the upper left, darkened toward the lower right.
+- Bevels are kept to 1–2 logical pixels.
 
-生图输出必须重新映射到真实 `16×16` 逻辑网格并人工检查，不能仅按图片尺寸宣称原生像素精度。
+Generated-image output must be remapped onto the real `16×16` logical grid and checked by hand; native pixel accuracy cannot be claimed merely from the image size.
 
-## 12. 错误处理
+## 12. Error handling
 
-- 找不到工作台：关闭菜单并显示本地化错误。
-- 玩家距离无效：拒绝 Payload，菜单按 `stillValid` 关闭。
-- 坐标越界：输入框标红，不提交。
-- 导出名非法：禁用导出。
-- 客户端维度与快照不一致：拒绝启动。
-- 已有任务运行：复用现有“already running”策略并显示摘要错误。
-- 写入失败：保持事务原子性，显示简短原因，完整堆栈进入日志和报告。
-- 方块实体 NBT 损坏：回退到自身位置，不使世界加载失败。
+- Workstation not found: close the menu and show a localized error.
+- Invalid player distance: reject the payload, and the menu closes according to `stillValid`.
+- Coordinate out of bounds: the input box is marked red and nothing is committed.
+- Illegal export name: the Export button is disabled.
+- Client dimension differs from the snapshot: refuse to start.
+- A job is already running: reuse the existing "already running" policy and show a summary error.
+- Write failure: keep transaction atomicity, show a short reason, and put the full stack trace in the log and report.
+- Corrupted block entity NBT: fall back to its own position, without making the world fail to load.
 
-## 13. 测试策略
+## 13. Test strategy
 
-严格执行 TDD。
+Strict TDD.
 
-### 13.1 单元测试
+### 13.1 Unit tests
 
-- 版本常量和 Gradle 元数据升级为 0.3.0。
-- 方块实体 NBT 往返、缺失字段和损坏字段回退。
-- 坐标规范化、尺寸、体积和溢出处理。
-- Menu 数据映射和距离有效性。
-- Payload 编解码。
-- Payload 菜单身份、位置、距离和坐标校验。
-- 脚下坐标由服务端玩家位置产生。
-- 多玩家最后合法提交生效。
-- 导出快照不可变。
-- 输入框提交、按钮步长、滚轮步长与 Shift 步长。
-- 非法输入不发送网络请求。
-- Telemetry 进度单调不减。
-- Screen 关闭触发取消。
-- 摘要状态映射。
-- OverlayKey 生命周期和清除策略。
+- The version constant and Gradle metadata are upgraded to 0.3.0.
+- Block entity NBT round trip, and fallback for missing and corrupted fields.
+- Coordinate normalization, size, volume and overflow handling.
+- Menu data mapping and distance validity.
+- Payload encoding and decoding.
+- Payload menu identity, position, distance and coordinate validation.
+- Feet coordinates are produced from the server-side player position.
+- With several players, the last legal commit wins.
+- The export snapshot is immutable.
+- Input box commit, button step, wheel step and Shift step.
+- Illegal input sends no network request.
+- Telemetry progress is monotonically non-decreasing.
+- Closing the Screen triggers cancellation.
+- Summary status mapping.
+- OverlayKey lifecycle and clearing policy.
 
-### 13.2 集成与游戏测试
+### 13.2 Integration and game tests
 
-- Block、Item、BlockEntityType、MenuType 和 CreativeModeTab 注册。
-- 放置朝向与五面纹理映射。
-- 方块保存、重载和掉落。
-- 菜单打开与失效。
-- Dedicated Server 启动不加载客户端类。
-- 原有命令和工作台共用导出管线。
-- 原有 0.2.0 测试全部继续通过。
+- Registration of Block, Item, BlockEntityType, MenuType and CreativeModeTab.
+- Placement facing and five-face texture mapping.
+- Block saving, reloading and drops.
+- Menu opening and invalidation.
+- A dedicated server starts without loading client classes.
+- The original command and the workstation share the export pipeline.
+- All the original 0.2.0 tests keep passing.
 
-### 13.3 手工验收
+### 13.3 Manual acceptance
 
-- GUI Scale 2、3、4 下无重叠、裁切或不可点击控件。
-- 四个水平朝向外观正确。
-- 两名玩家同时打开并编辑同一工作台。
-- 按钮、滚轮、Shift 滚轮和脚下取点正确。
-- 选区半透明体积被世界几何正常遮挡。
-- 关闭 GUI 取消导出并清理 staging。
-- Create、Touhou Little Maid 和普通方块导出回归。
-- Blender 中纯白顶点色仍不生成多余 Alpha 乘法节点。
+- No overlapping, clipped or unclickable controls at GUI scales 2, 3 and 4.
+- The appearance is correct in all four horizontal facings.
+- Two players open and edit the same workstation at the same time.
+- Buttons, wheel, Shift wheel and feet picking are correct.
+- The translucent selection volume is occluded normally by world geometry.
+- Closing the GUI cancels the export and cleans staging.
+- Create, Touhou Little Maid and ordinary block export regression.
+- Pure-white vertex colors in Blender still produce no extra alpha multiplication node.
 
-## 14. 文档与发布
+## 14. Documentation and release
 
-- `gradle.properties` 与 `McGltf.VERSION` 更新为 `0.3.0`。
-- `McGltf.DISPLAY_NAME` 更新为 `MineToMesh`。
-- README 更新双端安装要求、工作台操作、命令备用入口、配方与导出取消规则。
-- 手工验收矩阵增加工作台、多玩家、GUI Scale、Overlay 和 Dedicated Server 项目。
-- 构建产物为 `mcgltf-0.3.0.jar`。
-- 最终发布前验证生产 JAR 不包含 testmod 和设计原图。
+- `gradle.properties` and `McGltf.VERSION` are updated to `0.3.0`.
+- `McGltf.DISPLAY_NAME` is updated to `MineToMesh`.
+- The README is updated with the dual-side installation requirement, workstation operation, the command fallback, the recipe and the export cancellation rules.
+- The manual acceptance matrix gains workstation, multiplayer, GUI scale, Overlay and dedicated server items.
+- The build artifact is `mcgltf-0.3.0.jar`.
+- Before the final release, verify that the production JAR does not contain the testmod and the original design images.
 
-## 15. 参考依据
+## 15. References
 
-- NeoForge 1.21.1 Menus：`https://docs.neoforged.net/docs/1.21.1/gui/menus/`
-- NeoForge 1.21.1 Payloads：`https://docs.neoforged.net/docs/1.21.1/networking/payload/`
-- Create 1.21.1 `AllGuiTextures` 仅用于理解紧凑机械 GUI 的分段方式；生产资源全部原创，且 MineToMesh 不添加 Create 依赖。
+- NeoForge 1.21.1 Menus: `https://docs.neoforged.net/docs/1.21.1/gui/menus/`
+- NeoForge 1.21.1 Payloads: `https://docs.neoforged.net/docs/1.21.1/networking/payload/`
+- Create 1.21.1 `AllGuiTextures` is only used to understand how compact mechanical GUIs are segmented; all production resources are original, and MineToMesh adds no Create dependency.
 
-## 16. 完成标准
+## 16. Completion criteria
 
-0.3.0 只有在以下条件全部满足时才视为完成：
+0.3.0 is considered complete only when all of the following are met:
 
-- 双端注册和 Dedicated Server 安全通过。
-- 工作台可合成、放置、保存、打开和多人同步。
-- GUI 所有已确认交互可用。
-- 选区显示生命周期和深度遮挡正确。
-- 工作台导出复用现有管线并保持事务原子性。
-- 关闭 GUI 可以可靠取消。
-- 摘要和进度不虚构数据。
-- 生产 GUI 与方块纹理通过像素级人工检查。
-- 全量自动化测试通过。
-- 用户完成真实模组与 Blender 场景验收。
+- Dual-side registration and dedicated-server safety pass.
+- The workstation can be crafted, placed, saved, opened and synchronized in multiplayer.
+- All confirmed GUI interactions work.
+- The selection display lifecycle and depth occlusion are correct.
+- Workstation export reuses the existing pipeline and keeps transaction atomicity.
+- Closing the GUI reliably cancels.
+- The summary and progress fabricate no data.
+- The production GUI and block textures pass pixel-level manual inspection.
+- The full automated test suite passes.
+- The user completes acceptance with real mods and Blender scenes.

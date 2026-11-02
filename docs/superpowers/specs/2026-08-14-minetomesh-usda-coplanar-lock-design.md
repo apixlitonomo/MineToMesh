@@ -1,107 +1,107 @@
-# MineToMesh USDA、共面分层与持久选区设计
+# MineToMesh USDA, Coplanar Layering and Persistent Selection Design
 
-## 1. 背景
+## 1. Background
 
-MineToMesh 当前同时输出 glTF 2.0 与 OBJ。glTF 适合运行时交换，但标准拓扑只支持三角形、点和线；OBJ 可以保留 Quad，却缺少可靠的场景层级、实例和现代材质表达。Blender 等 CG 软件还会把 Minecraft 原始模型中完全共面的多层几何渲染成黑斑或闪烁，例如零厚度加速铁轨以及草方块底色层与 Tint Overlay。
+MineToMesh currently outputs both glTF 2.0 and OBJ. glTF suits runtime interchange, but its standard topology supports only triangles, points and lines; OBJ can keep quads but lacks reliable scene hierarchy, instancing and modern material expression. CG software such as Blender also renders the exactly coplanar multi-layer geometry of original Minecraft models as black spots or flicker, for example zero-thickness powered rails and the grass block base color layer with its tint Overlay.
 
-本次改动增加文本 OpenUSD（USDA）作为 CG 制作格式，立即移除当前 OBJ/MTL 输出，并在格式分流前修正普通方块模型中的完全重合四边面。同时，法杖界面增加客户端持久“锁定选区”，使选区框在法杖不在手中、重新连接或重启客户端后仍可恢复。
+This change adds text-based OpenUSD (USDA) as a CG production format, immediately removes the current OBJ/MTL output, and corrects exactly coincident quads in ordinary block models before the formats split. At the same time, the wand GUI gains a client-side persistent "Lock Selection" so that the selection box can still be restored when the wand is not in hand, after reconnecting, or after a client restart.
 
-## 2. 已确认决策
+## 2. Confirmed decisions
 
-- 每次导出生成 glTF、BIN、USDA、纹理、材质 Sidecar 与报告。
-- OBJ/MTL 立即移除，不保留隐藏开关或过渡版本。
-- 历史发布记录继续保留，当前 README、测试矩阵和实现文档改为 glTF/USDA。
-- USDA 使用 `.usda` 文本文件和外部 PNG，不生成 USDC 或 USDZ。
-- USDA 保留 Minecraft 原始 Quad；glTF 继续按规范三角化。
-- 完全重合面全部保留，后续层沿各自法线微量偏移。
-- 重合检测只作用于普通方块 `BakedQuad`，不修改流体、实体和方块实体 Renderer 输出。
-- 新增“锁定选区”客户端选项，与现有手持预览独立。
-- 每个单人世界或多人服务器只保存一个最后锁定选区；新锁定覆盖旧记录。
-- 锁定选区跨重启持久化，并按世界或服务器隔离。
+- Every export produces glTF, BIN, USDA, textures, material sidecars and a report.
+- OBJ/MTL is removed immediately, with no hidden switch or transition version.
+- Historical release records are kept, while the current README, test matrix and implementation documents change to glTF/USDA.
+- USDA uses `.usda` text files and external PNGs, and no USDC or USDZ is generated.
+- USDA keeps the original Minecraft quads; glTF continues to be triangulated as the specification requires.
+- All exactly coincident faces are kept, and later layers are offset slightly along their own normals.
+- Coincidence detection applies only to ordinary block `BakedQuad`s and does not change the output of fluid, entity and block-entity Renderers.
+- A new client-side "Lock Selection" option is added, independent from the existing hand preview.
+- Each singleplayer world or multiplayer server saves only one last locked selection; a new lock overwrites the old record.
+- The locked selection persists across restarts and is isolated per world or server.
 
-## 3. 非目标
+## 3. Non-goals
 
-- 不跨相邻方块合并 Quad 或构造大 N-gon。
-- 不检测只有部分面积相交的任意共面多边形。
-- 不对近似共面几何使用容差匹配。
-- 不修改动态 Renderer、流体或实体的几何拓扑。
-- 不接入 OpenUSD 原生 C++ 运行库。
-- 不生成 USDC、USDZ、Alembic、COLLADA 或 PLY。
-- 不为旧 OBJ 调用方保留 Java API 兼容层。
-- 不改变 glTF 的标准三角拓扑与 Khronos 校验要求。
+- No merging of quads across adjacent blocks and no construction of large N-gons.
+- No detection of arbitrary coplanar polygons that intersect only over part of their area.
+- No tolerance matching for approximately coplanar geometry.
+- No change to the geometry topology of dynamic Renderers, fluids or entities.
+- No integration of the native OpenUSD C++ runtime library.
+- No generation of USDC, USDZ, Alembic, COLLADA or PLY.
+- No Java API compatibility layer kept for old OBJ callers.
+- No change to the standard triangle topology of glTF or to the Khronos validation requirement.
 
-## 4. 总体架构
+## 4. Overall architecture
 
-三条链路相互独立：
+Three independent chains:
 
 ```text
-普通方块 BakedQuad
-  → 完全重合检测与分层偏移
+ordinary block BakedQuad
+  → exact coincidence detection and layered offset
   → PrimitiveAccumulator
-  → 不可变 ChunkBatch
+  → immutable ChunkBatch
       ├─ StreamingGltfSession
       └─ StreamingUsdaSession
 
-法杖 GUI 当前选区
+current selection in the wand GUI
   → LockedSelectionStore
-  → 按世界/服务器持久化
+  → persisted per world/server
   → SelectionOverlayRenderer
 ```
 
-`StreamingSceneSession` 同时管理 glTF 与 USDA Writer。任一 Writer 打开、追加或完成失败时，整个 `OutputTransaction` 回滚，不发布半套场景。
+`StreamingSceneSession` manages the glTF and USDA Writers together. If either Writer fails to open, append or finish, the whole `OutputTransaction` rolls back and no half scene is published.
 
-输出目录固定为：
+The output directory is fixed as:
 
 ```text
-<导出名>/
-├─ <导出名>.gltf
-├─ <导出名>.bin
-├─ <导出名>.usda
+<export name>/
+├─ <export name>.gltf
+├─ <export name>.bin
+├─ <export name>.usda
 ├─ textures/
 ├─ materials/
 └─ report.json
 ```
 
-## 5. 完全重合四边面处理
+## 5. Exactly coincident quad handling
 
-### 5.1 处理位置与范围
+### 5.1 Where and what
 
-处理发生在 `BlockModelExtractor` 收集完单个方块的全部 `PendingStream` 后、路由到普通 Section 或全局草地 Overlay 之前。这样草方块底色层与 Overlay 能在拆分到不同 Accumulator 之前参与同一轮检测。
+Processing happens after `BlockModelExtractor` has collected all `PendingStream`s of a single block and before they are routed to an ordinary Section or the global grass Overlay. This lets the grass block base color layer and the Overlay take part in the same round of detection before being split into different Accumulators.
 
-检测仅处理四顶点方块面。每个方块单独分组，避免把相邻方块共享边界误判为同一重合组。
+Detection handles only four-vertex block faces. Each block is grouped separately, to avoid mistaking shared boundaries of neighboring blocks for the same coincident group.
 
-### 5.2 精确几何指纹
+### 5.2 Exact geometry fingerprint
 
-每个四边面生成 `FaceGeometryKey`：
+Each quad produces a `FaceGeometryKey`:
 
-1. 读取四个顶点的位置。
-2. 将 `-0.0F` 归一化为 `0.0F`。
-3. 使用 `Float.floatToIntBits()` 表示每个坐标。
-4. 将四个 XYZ 元组按字典序排序。
-5. 排序结果组成不可变 Key。
+1. Read the positions of the four vertices.
+2. Normalize `-0.0F` to `0.0F`.
+3. Represent each coordinate with `Float.floatToIntBits()`.
+4. Sort the four XYZ tuples in lexicographic order.
+5. The sorted result forms an immutable Key.
 
-Key 不包含绕序、法线、UV、材质、颜色、透明模式或 Overlay 路由。因此同向覆盖层、反向零厚度双面以及不同材质的完全共面 Quad 都会进入同一组。
+The Key does not include winding, normals, UVs, material, color, transparency mode or Overlay routing. Therefore same-direction cover layers, reversed zero-thickness double faces and exactly coplanar quads with different materials all fall into the same group.
 
-第一版不使用容差。坐标只要存在任意可表示差异，就不会命中。
+The first version uses no tolerance. Any representable difference in a coordinate means no match.
 
-### 5.3 偏移规则
+### 5.3 Offset rule
 
-同组面保持原捕获顺序：
+Faces in the same group keep their original capture order:
 
 ```text
-第 0 层：0
-第 1 层：normal × 1/1024
-第 2 层：normal × 2/1024
-第 N 层：normal × N/1024
+layer 0: 0
+layer 1: normal × 1/1024
+layer 2: normal × 2/1024
+layer N: normal × N/1024
 ```
 
-每层法线优先使用四个顶点法线的归一化平均值。平均值无效时使用顶点位置叉积计算几何法线，并与可用顶点法线保持同向。两种法线都无效时不移动该层，并记录 `COPLANAR_FACE_NORMAL_INVALID`。
+For each layer the normal is preferably the normalized average of the four vertex normals. If the average is invalid, the geometric normal computed from the cross product of the vertex positions is used and kept in the same direction as the available vertex normals. If both normals are invalid, that layer is not moved and `COPLANAR_FACE_NORMAL_INVALID` is recorded.
 
-偏移只替换 `Vertex.position`，保留法线、UV、Color、MaterialKey、PrimitiveMode、绕序和路由。
+The offset only replaces `Vertex.position`, keeping normals, UVs, Color, MaterialKey, PrimitiveMode, winding and routing.
 
-### 5.4 统计与报告
+### 5.4 Statistics and report
 
-`report.json` 升级 Schema，增加：
+The `report.json` schema is upgraded with:
 
 ```json
 "geometryAdjustments": {
@@ -115,13 +115,13 @@ Key 不包含绕序、法线、UV、材质、颜色、透明模式或 Overlay �
 }
 ```
 
-普通命中只累计统计，不逐面生成 Diagnostic。只有无法计算位移法线等异常路径写 Diagnostic，避免大面积草地造成报告膨胀。
+Ordinary hits only accumulate statistics and do not generate a Diagnostic per face. A Diagnostic is written only for abnormal paths such as an offset normal that cannot be computed, so that large grass areas do not bloat the report.
 
-## 6. USDA Stage 契约
+## 6. USDA stage contract
 
-### 6.1 Stage 元数据
+### 6.1 Stage metadata
 
-USDA 头部为：
+The USDA header is:
 
 ```usda
 #usda 1.0
@@ -132,23 +132,23 @@ USDA 头部为：
 )
 ```
 
-采用 Y-Up，使 Blender 导入后的坐标继续满足：
+Y-Up is used so that coordinates after Blender import keep satisfying:
 
-- Minecraft `+X` 对应 Blender `+X`。
-- Minecraft `+Y` 对应 Blender `+Z`。
-- Minecraft `+Z` 对应 Blender `-Y`。
+- Minecraft `+X` maps to Blender `+X`.
+- Minecraft `+Y` maps to Blender `+Z`.
+- Minecraft `+Z` maps to Blender `-Y`.
 
-所有多边形 Mesh 写入：
+All polygon meshes write:
 
 ```usda
 uniform token subdivisionScheme = "none"
 ```
 
-避免 DCC 将 Minecraft Quad 解释为 Catmull-Clark 细分曲面。
+so that DCC tools do not interpret Minecraft quads as Catmull-Clark subdivision surfaces.
 
-### 6.2 场景层级
+### 6.2 Scene hierarchy
 
-Stage 使用以下路径：
+The stage uses the following paths:
 
 ```text
 /MineToMesh
@@ -160,28 +160,28 @@ Stage 使用以下路径：
 └─ Materials
 ```
 
-`/MineToMesh` 通过自定义属性保存 Minecraft 版本、NeoForge 版本、导出器版本、维度、选区、原点、资源包、模组列表、快照模式和导出选项。
+`/MineToMesh` stores the Minecraft version, NeoForge version, exporter version, dimension, selection, origin, resource packs, mod list, snapshot mode and export options as custom attributes.
 
-普通捕获节点保持独立 Xform。节点中的表面 Primitive 合并为一个或少量 Mesh，并用 `UsdGeomSubset` 按完整 `MaterialKey` 绑定材质。由于 USD 的 `doubleSided` 属于 Gprim，至少按双面属性分桶，不能把不同双面语义强行放入同一 Mesh。
+Ordinary capture nodes stay independent Xforms. The surface primitives in a node are merged into one or a few Meshes, and a `UsdGeomSubset` binds materials by complete `MaterialKey`. Because USD's `doubleSided` belongs to the Gprim, meshes are bucketed at least by the double-sided attribute, and different double-sided semantics cannot be forced into the same Mesh.
 
-方块实体继续按完整 `MaterialKey` 全局合批；普通实体保持独立；草侧 Overlay 合并为一个选择级对象。
+Block entities continue to be batched globally by complete `MaterialKey`; ordinary entities stay independent; the grass side Overlay is merged into a single selection-level object.
 
-### 6.3 拓扑映射
+### 6.3 Topology mapping
 
-| 内部模式 | USDA 表达 |
+| Internal mode | USDA representation |
 |---|---|
-| `QUADS` | `faceVertexCounts` 每项为 4 |
-| `TRIANGLES` | `faceVertexCounts` 每项为 3 |
-| `TRIANGLE_FAN` | 保持绕序展开为三角面 |
-| `TRIANGLE_STRIP` | 保持奇偶绕序展开为三角面 |
-| `LINES` | 线性、非周期 `BasisCurves` |
-| `LINE_STRIP` | 线性、非周期 `BasisCurves` |
+| `QUADS` | every entry of `faceVertexCounts` is 4 |
+| `TRIANGLES` | every entry of `faceVertexCounts` is 3 |
+| `TRIANGLE_FAN` | expanded into triangles preserving winding |
+| `TRIANGLE_STRIP` | expanded into triangles preserving parity winding |
+| `LINES` | linear, non-periodic `BasisCurves` |
+| `LINE_STRIP` | linear, non-periodic `BasisCurves` |
 
-当前捕获层没有通用 N-gon PrimitiveMode；USDA 数据模型允许未来直接写入任意 `faceVertexCounts`，本次不跨方块重建 N-gon。
+The current capture layer has no generic N-gon PrimitiveMode; the USDA data model allows future direct writing of arbitrary `faceVertexCounts`, and this change does not rebuild N-gons across blocks.
 
-### 6.4 顶点属性
+### 6.4 Vertex attributes
 
-Mesh 输出：
+Mesh output:
 
 - `points`
 - `normals`
@@ -190,83 +190,83 @@ Mesh 输出：
 - `primvars:st`
 - `primvars:minetomeshTint`
 
-UV、法线与 Tint 使用 `faceVarying`，保留面角接缝。USD 与 glTF 的纹理纵向约定不同，USDA 写入 `st` 时使用：
+UVs, normals and Tint use `faceVarying`, keeping face-corner seams. USD and glTF use different vertical texture conventions, so USDA writes `st` with:
 
 ```text
 st.x = uv.x
 st.y = 1.0 - uv.y
 ```
 
-### 6.5 材质网络
+### 6.5 Material network
 
-每个完整 `MaterialKey` 对应一个稳定命名的 `UsdShadeMaterial`。名称由可读前缀和完整键哈希组成，避免相同纹理名但不同透明、发光或采样语义被误合并。
+Each complete `MaterialKey` corresponds to one stably named `UsdShadeMaterial`. The name consists of a readable prefix and the hash of the complete key, so that materials with the same texture name but different transparency, emission or sampling semantics are not merged by mistake.
 
-材质使用标准节点：
+Materials use standard nodes:
 
 ```text
 UsdPreviewSurface
 ├─ UsdUVTexture
-├─ UsdPrimvarReader_float2    读取 st
-└─ UsdPrimvarReader_float4    读取 minetomeshTint
+├─ UsdPrimvarReader_float2    reads st
+└─ UsdPrimvarReader_float4    reads minetomeshTint
 ```
 
-`UsdUVTexture.inputs:scale` 连接 Tint Primvar，使纹理采样与群系颜色相乘。纹理 RGB 连接 `diffuseColor`；Alpha 连接 `opacity`。MASK 材质写入 `opacityThreshold`，BLEND 材质保持连续透明；发光材质同时连接 `emissiveColor`。
+`UsdUVTexture.inputs:scale` connects to the Tint Primvar, so texture sampling is multiplied by the biome color. The texture RGB connects to `diffuseColor`; alpha connects to `opacity`. MASK materials write `opacityThreshold`, BLEND materials keep continuous transparency; emissive materials also connect `emissiveColor`.
 
-Mesh 的 `doubleSided` 按分桶后的材质语义写入。
+The Mesh's `doubleSided` is written according to the bucketed material semantics.
 
-UsdPreviewSurface 没有跨 DCC 统一的最近邻过滤字段。USDA 写入自定义 `minetomesh:samplerMode`，并继续在 `materials/` Sidecar 中保存精确采样语义。Blender 5.2 人工验收最近邻恢复情况；若原生导入器不读取该信息，README 明确要求把 Image Texture 插值设为 Closest。本次不伪造非标准 USD Shader。
+UsdPreviewSurface has no cross-DCC unified nearest-neighbor filtering field. USDA writes a custom `minetomesh:samplerMode` and keeps storing the exact sampling semantics in the `materials/` sidecar. Blender 5.2 manual acceptance checks how nearest-neighbor is restored; if the native importer does not read this information, the README explicitly asks to set the Image Texture interpolation to Closest. No non-standard USD Shader is faked in this change.
 
-### 6.6 流式写入
+### 6.6 Streaming writes
 
-`StreamingUsdaSession` 不在内存中持有完整世界。它为类别、全局 Overlay 和按材质合批的方块实体维护受控临时片段，例如：
+`StreamingUsdaSession` does not hold the complete world in memory. It maintains controlled temporary fragments for categories, the global Overlay and material-batched block entities, for example:
 
 ```text
-.<名称>-chunks.usdapart
-.<名称>-block-entities-<材质>.usdapart
-.<名称>-overlay.usdapart
+.<name>-chunks.usdapart
+.<name>-block-entities-<material>.usdapart
+.<name>-overlay.usdapart
 ```
 
-每个 `ChunkBatch` 只追加文本片段、数组元素和计数。`finish()` 组装 Stage 头、根节点、类别、材质与闭合括号，并验证数组长度、面计数、索引范围和引用路径。
+Each `ChunkBatch` only appends text fragments, array elements and counts. `finish()` assembles the stage header, root node, categories, materials and closing brackets, and validates array lengths, face counts, index ranges and reference paths.
 
-完成、取消、构造失败和中途异常路径都必须关闭 Writer 并删除 `.usdapart`。
+The completion, cancellation, construction-failure and mid-way exception paths must all close the Writer and delete the `.usdapart` files.
 
-## 7. OBJ 移除
+## 7. OBJ removal
 
-删除当前生产代码：
+Delete the current production code:
 
 - `StreamingObjSession`
 - `ObjTopologyConverter`
 - `ObjNames`
-- `StreamingSceneSession` 中的 OBJ 生命周期和统计
-- 当前 README、测试矩阵、输出事务断言与文档中的现行 OBJ 契约
+- The OBJ lifecycle and statistics in `StreamingSceneSession`
+- The current OBJ contract in the current README, test matrix, output transaction assertions and documents
 
-删除对应当前测试，并用 USDA 等价测试覆盖 Quad、材质、合批、Overlay、取消和临时文件清理。旧版本 `docs/releases/` 保持原文，因为它们描述当时真实发布内容。
+Delete the corresponding current tests, and cover quads, materials, batching, Overlay, cancellation and temporary file cleanup with equivalent USDA tests. The old-version `docs/releases/` keep their original text, because they describe what was actually released at the time.
 
-根 Extras 的 `formats` 改为 `["gltf", "usda"]`，移除 `sourceTopologyPreservedInObj`，增加 `sourceTopologyPreservedInUsda=true`。
+The `formats` in the root Extras changes to `["gltf", "usda"]`, `sourceTopologyPreservedInObj` is removed, and `sourceTopologyPreservedInUsda=true` is added.
 
-## 8. 持久锁定选区
+## 8. Persistent locked selection
 
-### 8.1 数据所有权
+### 8.1 Data ownership
 
-现有 `ExportWandSelection.overlayEnabled` 继续控制手持法杖预览。锁定选区是纯客户端状态，不加入法杖 DataComponent，不增加网络 Payload，也不修改服务端授权流程。
+The existing `ExportWandSelection.overlayEnabled` continues to control the held-wand preview. The locked selection is purely client-side state: it is not added to the wand DataComponent, adds no network payload and does not change the server authorization flow.
 
-新增 `LockedSelectionStore` 保存每个世界或服务器最后锁定的一个完整选区。
+A new `LockedSelectionStore` saves the last locked complete selection of each world or server.
 
-### 8.2 配置格式
+### 8.2 Config format
 
-配置路径：
+Config path:
 
 ```text
 .minecraft/config/minetomesh/locked-selections.json
 ```
 
-格式：
+Format:
 
 ```json
 {
   "schemaVersion": 1,
   "profiles": {
-    "<SHA-256上下文键>": {
+    "<SHA-256 context key>": {
       "dimension": "minecraft:overworld",
       "pos1": [0, 64, 0],
       "pos2": [32, 96, 32]
@@ -275,125 +275,125 @@ UsdPreviewSurface 没有跨 DCC 统一的最近邻过滤字段。USDA 写入自�
 }
 ```
 
-上下文原文为：
+The raw context is:
 
-- 单人模式：规范化存档根路径。
-- 多人模式：规范化服务器地址与端口。
+- Singleplayer: the normalized save root path.
+- Multiplayer: the normalized server address and port.
 
-文件只保存 SHA-256，不明文保存路径或服务器地址。每个 Profile 只有一个记录，维度包含在记录中；在另一维度锁定会覆盖原记录。
+The file only stores the SHA-256 and never stores the path or server address in plain text. Each profile has only one record, the dimension is part of the record, and locking in another dimension overwrites the original record.
 
-### 8.3 原子写入与损坏恢复
+### 8.3 Atomic write and corruption recovery
 
-写入流程为同目录临时文件、flush、原子移动替换。文件系统不支持原子移动时退化为受控替换。
+The write flow is a temporary file in the same directory, flush, then an atomic move replace. When the filesystem does not support atomic moves it degrades to a controlled replace.
 
-只有磁盘写入成功后才更新内存状态。写入失败时保留旧文件和旧内存记录，并在 GUI 状态栏显示失败。
+The in-memory state is updated only after the disk write succeeds. When the write fails the old file and the old in-memory record are kept and the failure is shown in the GUI status bar.
 
-配置解析失败时将原文件隔离为带时间戳的 `.corrupt` 文件，加载空 Store 并记录日志；手持预览继续工作。
+When config parsing fails, the original file is quarantined as a timestamped `.corrupt` file, an empty Store is loaded and a log entry is written; the hand preview keeps working.
 
-### 8.4 GUI 行为
+### 8.4 GUI behavior
 
-现有底部一行改成三个等宽开关：
+The existing bottom row becomes three equal-width toggles:
 
 ```text
-手持预览：开 | 锁定选区：关 | 导出玩家：关
+Preview: On | Lock: Off | Players: Off
 ```
 
-锁定按钮规则：
+Lock button rules:
 
-- 当前完整选区等于当前 Profile 的锁定记录：点击后解锁。
-- 当前完整选区与锁定记录不同：点击后覆盖为当前选区。
-- 当前选区不完整：拒绝操作并显示状态提示。
-- 锁定状态以“当前法杖选区是否等于持久记录”为准。
+- Current complete selection equals the current profile's locked record: clicking unlocks.
+- Current complete selection differs from the locked record: clicking overwrites it with the current selection.
+- Current selection incomplete: the operation is rejected and a status hint is shown.
+- The lock state is based on "whether the current wand selection equals the persisted record".
 
-### 8.5 渲染解析
+### 8.5 Render resolution
 
-`SelectionOverlayRenderer` 同时解析：
+`SelectionOverlayRenderer` resolves both:
 
-1. 当前主手或副手法杖的手持预览。
-2. 当前世界或服务器 Profile 的持久锁定记录。
+1. The hand preview of the wand currently in the main hand or off hand.
+2. The persisted lock record of the current world or server profile.
 
-两个 Snapshot 完全相同时只绘制一次；不同时同时显示。锁定记录的维度与当前维度不匹配时隐藏，返回原维度后恢复。无法建立当前世界 Profile 时只禁用持久记录，不影响手持预览。
+When the two snapshots are identical it draws only once; when they differ both are shown. A lock record is hidden when its dimension does not match the current one and restored after returning to the original dimension. When the current world profile cannot be established, only the persisted record is disabled and the hand preview is unaffected.
 
-## 9. 错误处理与事务语义
+## 9. Error handling and transaction semantics
 
-- glTF 或 USDA 任一 Writer 失败，整个导出事务失败并清理临时目录。
-- USDA 数组计数、拓扑和引用在发布前执行内部验证。
-- glTF 继续执行现有内部校验与 Khronos Validator 验收。
-- 重合面异常法线只影响该层位移，并写 Diagnostic，不中断整个方块捕获。
-- 持久配置读写失败不影响世界渲染、法杖网络状态或导出任务。
-- Profile 不可解析、维度不匹配或记录不完整时不渲染锁定框。
+- If either the glTF or the USDA Writer fails, the whole export transaction fails and the temporary directory is cleaned.
+- USDA array counts, topology and references run internal validation before publishing.
+- glTF continues to run the existing internal validation and Khronos Validator acceptance.
+- An abnormal coincident-face normal only affects that layer's offset and writes a Diagnostic, without interrupting the capture of the whole block.
+- Persistent config read/write failures do not affect world rendering, the wand network state or export jobs.
+- When the profile cannot be resolved, the dimension does not match or the record is incomplete, the lock box is not rendered.
 
-## 10. 测试策略
+## 10. Test strategy
 
-所有实现遵循 TDD，先增加能重现缺失行为的失败测试，再写最小实现。
+All implementation follows TDD: add failing tests that reproduce the missing behavior first, then write the minimal implementation.
 
-### 10.1 共面分层自动化测试
+### 10.1 Coplanar layering automated tests
 
-- 同向、反向、旋转绕序、逆序及不同材质的完全重合 Quad 命中同组。
-- `-0.0F` 与 `0.0F` 等价。
-- 第一层不移动，后续层按 `1/1024` 递增。
-- 每层沿自己的法线移动。
-- 接近但不完全相同的面不移动。
-- 三层及以上统计正确。
-- 无效平均法线使用几何法线；完全退化时记录 Diagnostic。
-- 普通方块集成路径在路由 Overlay 前执行分层。
+- Same-direction, reversed, rotated-winding, reverse-ordered and different-material exactly coincident quads hit the same group.
+- `-0.0F` and `0.0F` are equivalent.
+- The first layer does not move, and later layers increase by `1/1024`.
+- Each layer moves along its own normal.
+- Faces that are close but not exactly identical do not move.
+- Statistics are correct for three layers and more.
+- An invalid average normal uses the geometric normal; a fully degenerate case records a Diagnostic.
+- The ordinary block integration path runs layering before routing the Overlay.
 
-### 10.2 USDA 自动化测试
+### 10.2 USDA automated tests
 
-- Quad 写出一个四边面，glTF 同源数据写出两个三角面。
-- Triangle、Fan、Strip、Lines 与 LineStrip 映射正确。
-- `subdivisionScheme="none"`、Y-Up、单位、层级和根元数据正确。
-- UV 执行 `1-v`，法线与 Tint 使用 `faceVarying`。
-- PreviewSurface、纹理、Tint、Alpha Threshold、发光和双面语义正确。
-- 多材质节点使用合法 GeomSubset。
-- 方块实体全局材质合批与 Overlay 全局合并正确。
-- 数组计数或索引非法时拒绝发布。
-- 完成、取消和异常后无 `.usdapart` 残留。
-- 输出目录不存在 `.obj` 与 `.mtl`。
+- A quad writes one four-sided face, while the same source data in glTF writes two triangles.
+- Triangle, Fan, Strip, Lines and LineStrip map correctly.
+- `subdivisionScheme="none"`, Y-Up, units, hierarchy and root metadata are correct.
+- UVs apply `1-v`, and normals and Tint use `faceVarying`.
+- PreviewSurface, texture, Tint, alpha threshold, emission and double-sided semantics are correct.
+- Multi-material nodes use valid GeomSubsets.
+- Block-entity global material batching and the global Overlay merge are correct.
+- Publishing is refused for illegal array counts or indices.
+- No `.usdapart` remains after completion, cancellation and exceptions.
+- No `.obj` or `.mtl` exists in the output directory.
 
-### 10.3 持久选区自动化测试
+### 10.3 Persistent selection automated tests
 
-- 单人存档、不同服务器和相同服务器各自隔离。
-- 地址与路径规范化后生成稳定哈希。
-- 写入、重载、覆盖和解锁正确。
-- 重启后恢复，维度不匹配时隐藏，返回后恢复。
-- 新选区覆盖旧记录。
-- 损坏配置隔离且不崩溃。
-- 写入失败时不更新内存锁定状态。
-- 手持与锁定 Snapshot 相同时去重，不同时均保留。
-- 不完整选区无法锁定。
+- A singleplayer save, different servers and the same server are each isolated.
+- Normalized addresses and paths produce stable hashes.
+- Writing, reloading, overwriting and unlocking are correct.
+- It is restored after a restart, hidden when the dimension does not match, and restored on return.
+- A new selection overwrites the old record.
+- A corrupted config is quarantined without crashing.
+- The in-memory lock state is not updated when the write fails.
+- Hand and lock snapshots are deduplicated when identical and both kept when different.
+- An incomplete selection cannot be locked.
 
-### 10.4 回归测试
+### 10.4 Regression tests
 
-- 全量 JUnit 测试。
-- `compileJava`、`compileTestJava` 与资源检查。
-- 专用服务端启动烟测，确保客户端持久 Store 和 USD Writer 不污染服务端类加载。
-- README 与手工矩阵策略测试更新为 glTF/USDA。
+- The full JUnit suite.
+- `compileJava`, `compileTestJava` and resource checks.
+- A dedicated-server startup smoke test, ensuring the client persistent Store and the USD Writer do not pollute server class loading.
+- README and manual matrix policy tests updated to glTF/USDA.
 
-## 11. Blender 5.2 人工验收
+## 11. Blender 5.2 manual acceptance
 
-- USDA 导入后原版方块保持 Quad。
-- 加速铁轨无黑斑、闪烁或完全共面层。
-- 草方块底色层与 Tint Overlay 均保留。
-- 作物外观没有可见变化。
-- Minecraft 与 Blender 坐标轴、原点、尺度、绕序和法线正确。
-- PNG、群系 Tint、Cutout、透明与发光材质可用。
-- Create 传送带等动态方块实体层级和材质合批正确。
-- Outliner 包含固定类别层级，草侧 Overlay 只有一个选择级对象。
-- 锁定选区跨客户端重启和重新连接恢复。
-- 不同存档或服务器不会显示其他 Profile 的锁定框。
-- 维度切换隐藏并在返回后恢复。
-- glTF 继续通过 Khronos Validator，USDA 可由 Blender 5.2 无错误导入。
+- After USDA import, vanilla blocks keep their quads.
+- Powered rails show no black spots, flicker or exactly coplanar layers.
+- Both the grass block base color layer and the tint Overlay are kept.
+- Crops show no visible change in appearance.
+- Minecraft and Blender axes, origin, scale, winding and normals are correct.
+- PNG, biome tint, cutout, transparency and emissive materials work.
+- Dynamic block entities such as Create belts have correct hierarchy and material batching.
+- The Outliner contains the fixed category hierarchy, and the grass side Overlay is a single selection-level object.
+- The locked selection is restored across client restarts and reconnects.
+- Different saves or servers never show other profiles' lock boxes.
+- Dimension switching hides it and it is restored on return.
+- glTF keeps passing the Khronos Validator, and the USDA imports into Blender 5.2 without errors.
 
-## 12. 完成标准
+## 12. Completion criteria
 
-以下条件全部满足后才视为完成：
+It is considered complete only when all of the following are met:
 
-1. 所有自动化测试通过。
-2. 构建和专用服务端烟测通过。
-3. 输出只包含 glTF/BIN/USDA 及共享附属文件，不再生成 OBJ/MTL。
-4. USDA 在 Blender 5.2 中保留 Quad、层级、坐标与材质核心语义。
-5. 铁轨和草地共面案例完成视觉验收。
-6. 持久锁定选区完成跨重启、跨维度与 Profile 隔离验收。
-7. 临时片段、失败事务和损坏配置均按设计清理或隔离。
-8. README、测试矩阵和报告 Schema 与实际行为一致。
+1. All automated tests pass.
+2. The build and the dedicated-server smoke test pass.
+3. The output contains only glTF/BIN/USDA and the shared auxiliary files, and no OBJ/MTL is generated any more.
+4. The USDA keeps quads, hierarchy, coordinates and core material semantics in Blender 5.2.
+5. The visual acceptance of the rail and grass coplanar cases is completed.
+6. The persistent locked selection passes acceptance across restarts, across dimensions and for profile isolation.
+7. Temporary fragments, failed transactions and corrupted configs are all cleaned up or quarantined as designed.
+8. The README, test matrix and report schema agree with the actual behavior.

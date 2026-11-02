@@ -1,192 +1,192 @@
-# MineToMesh 连接纹理、草方块 Overlay 与输入隔离设计
+# MineToMesh Connected Textures, Grass Block Overlay and Input Isolation Design
 
-日期：2026-08-11  
-状态：设计已确认，待用户书面复核  
-基线分支：`feature/mcgltf-0.4.0-export-wand`  
-目标版本：0.5.0
-Minecraft：1.21.1  
-NeoForge：21.1.244
+Date: 2026-08-11  
+Status: design confirmed, awaiting the user's written review  
+Baseline branch: `feature/mcgltf-0.4.0-export-wand`  
+Target version: 0.5.0  
+Minecraft: 1.21.1  
+NeoForge: 21.1.244
 
-## 1. 背景
+## 1. Background
 
-当前候选版本在真实 Create 6.x 场景中暴露出三类问题：
+The current candidate version exposed three kinds of problems in a real Create 6.x scene:
 
-1. Create 方块在游戏中使用连续纹理，导出后却退化为每个方块重复单块纹理。
-2. 原版草方块侧面导出两层共面几何，Blender 中难以把透明草色覆盖层与主体分开编辑。
-3. 导出名输入框聚焦时，按 `E` 等字符键仍会触发物品栏或其他游戏快捷键；中文输入法也受同一物理按键泄漏影响。
+1. Create blocks use continuous textures in the game, but after export they degrade to a single-block texture repeated on every block.
+2. The vanilla grass block side exports two layers of coplanar geometry, making it hard in Blender to separate the transparent grass-color overlay from the body for editing.
+3. While the export name input box is focused, pressing character keys such as `E` still triggers the inventory or other game hotkeys; Chinese input methods are affected by the same physical key leak.
 
-本轮目标是在不引入 Create 硬依赖、不牺牲流式导出边界的前提下，捕获游戏已经计算完成的连接纹理 UV；保留草方块原始双层结构，但把整个选区的侧面 Overlay 汇总为一个独立对象；并在魔杖 GUI 打开时彻底隔离游戏快捷键。
+The goal of this round is, without introducing a hard Create dependency and without sacrificing the streaming export boundary, to capture the connected texture UVs the game has already computed; to keep the original two-layer structure of the grass block while merging the side Overlay of the whole selection into one independent object; and to completely isolate game hotkeys while the wand GUI is open.
 
-视觉正确性由项目所有者在真实游戏与 Blender 中人工验收。自动化只验证可机械判定的纹理身份、UV、对象结构、材质属性、键盘事件、文档合法性与构建结果。
+Visual correctness is accepted manually by the project owner in the real game and in Blender. Automation only verifies what can be decided mechanically: texture identity, UVs, object structure, material attributes, keyboard events, document validity and build results.
 
-## 2. 已确认目标
+## 2. Confirmed goals
 
-### 2.1 必须实现
+### 2.1 Must implement
 
-- 兼容 Minecraft 1.21.1、NeoForge 21.1.244 与 Create 6.x 的连接纹理导出。
-- 不引用 Create、Catnip 或 Flywheel 的编译期类型，不增加对应运行时依赖。
-- 当 `BakedQuad` 声明的 Sprite 与顶点实际图集 UV 不一致时，从同一 `TextureAtlas` 反查真实 Sprite。
-- Create 方块应导出其 `create:block/*_connected` 纹理表，并保留游戏已经选好的子格 UV。
-- 普通方块、动画纹理与现有资源包覆盖保持原有导出行为。
-- 保留原版草方块的底层侧面和透明染色 Overlay 两层几何。
-- 整个选区的 `minecraft:block/grass_block_side_overlay` 汇总为唯一独立对象。
-- Overlay 保留透明材质、群系 Tint 顶点色、原始世界坐标与原始 Quad。
-- 魔杖 GUI 打开期间，键盘只有 Esc 可以关闭界面；鼠标取消按钮保持有效，游戏和模组快捷键不得接收键盘事件。
-- 英文字符、中文输入法提交字符、数字、负号及常用文本编辑组合键在输入框内正常工作。
-- Enter 只提交当前输入框，不直接开始导出；Tab 只切换 GUI 焦点。
-- 失败与取消继续遵守现有 `OutputTransaction` 清理规则。
+- Connected-texture export compatible with Minecraft 1.21.1, NeoForge 21.1.244 and Create 6.x.
+- No compile-time types from Create, Catnip or Flywheel are referenced, and no matching runtime dependency is added.
+- When the Sprite declared by a `BakedQuad` disagrees with the actual atlas UVs of its vertices, look up the real Sprite from the same `TextureAtlas`.
+- Create blocks should export their `create:block/*_connected` texture sheets and keep the sub-cell UVs the game has already chosen.
+- Ordinary blocks, animated textures and existing resource pack overrides keep their original export behavior.
+- Keep the two layers of geometry of the vanilla grass block: the base side layer and the transparent tinted Overlay.
+- Merge the `minecraft:block/grass_block_side_overlay` of the whole selection into a single independent object.
+- The Overlay keeps its transparent material, the biome-tint vertex colors, the original world coordinates and the original quads.
+- While the wand GUI is open, only Esc on the keyboard can close the interface; the mouse Cancel button stays effective, and game and mod hotkeys must not receive keyboard events.
+- Latin characters, characters committed by Chinese input methods, digits, the minus sign and common text-editing key combinations work normally inside the input box.
+- Enter only commits the current input box and does not start the export directly; Tab only switches GUI focus.
+- Failure and cancellation continue to follow the existing `OutputTransaction` cleanup rules.
 
-### 2.2 明确不做
+### 2.2 Explicitly not done
 
-- 不重新实现 Create 的连接判定、`CTType` 或 `CTSpriteShiftEntry` 算法。
-- 不通过反射读取 Create 私有字段。
-- 不默认导出整张方块图集。
-- 不把草方块底图与 Overlay 烘焙成单张纹理。
-- 不把每个草方块 Overlay 拆成独立对象。
-- 不把所有透明材质或所有方块材质都拆成全局对象。
-- 不通过清空全局 `KeyMapping` 状态阻止快捷键。
-- 不使用截图相似度、自动视觉评分或自动视觉通过判定替代人工验收。
+- Create's connection logic, `CTType` or `CTSpriteShiftEntry` algorithms are not re-implemented.
+- Create's private fields are not read through reflection.
+- The whole block atlas is not exported by default.
+- The grass base image and the Overlay are not baked into a single texture.
+- Each grass block Overlay is not split into its own object.
+- Not all transparent materials or all block materials are split into global objects.
+- Hotkeys are not blocked by clearing the global `KeyMapping` state.
+- Screenshot similarity, automatic visual scoring or automatic visual pass decisions do not replace manual acceptance.
 
-## 3. 根因分析
+## 3. Root cause analysis
 
-### 3.1 Create 连接纹理为何退化
+### 3.1 Why Create connected textures degrade
 
-Create 1.21.1 的 `CTModel` 先在 `getModelData` 中读取真实世界邻接方块，生成每个面的连接纹理索引；随后在 `getQuads` 中克隆原始 `BakedQuad`，把四个顶点 UV 改写到目标 `*_connected` Sprite 的某个子格。
+Create 1.21.1's `CTModel` first reads the real neighboring blocks of the world in `getModelData` to produce a connected-texture index for each face; then in `getQuads` it clones the original `BakedQuad` and rewrites the four vertex UVs into one sub-cell of the target `*_connected` Sprite.
 
-关键细节是 `BakedQuadHelper.clone` 继续保留原始 `quad.getSprite()`。因此最终 Quad 同时包含：
+The key detail is that `BakedQuadHelper.clone` keeps the original `quad.getSprite()`. The final Quad therefore contains both:
 
 ```text
-声明 Sprite：原始单块纹理
-实际 UV：目标 connected 纹理表在方块图集中的区域
+declared Sprite: the original single-block texture
+actual UVs: the region of the target connected texture sheet in the block atlas
 ```
 
-游戏直接用图集 UV 采样，显示正确。当前 `BlockModelExtractor` 先信任 `quad.getSprite()`，提取原始单块 PNG，再按该 Sprite 的边界归一化已经被 Create 改写的 UV。归一化结果落到单块纹理外，材质重复采样后便表现为一个个独立方块。
+The game samples directly with the atlas UVs, so it displays correctly. The current `BlockModelExtractor` first trusts `quad.getSprite()`, extracts the original single-block PNG, and then normalizes the UVs already rewritten by Create against that Sprite's bounds. The normalized result lands outside the single-block texture, and after the material samples it repeatedly it shows up as separate individual blocks.
 
-参考实现：
+Reference implementations:
 
-- Create `CTModel.java`：`https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/src/main/java/com/simibubi/create/foundation/block/connected/CTModel.java`
-- Create `CTSpriteShiftEntry.java`：`https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/src/main/java/com/simibubi/create/foundation/block/connected/CTSpriteShiftEntry.java`
-- Create `BakedQuadHelper.java`：`https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/src/main/java/com/simibubi/create/foundation/model/BakedQuadHelper.java`
+- Create `CTModel.java`: `https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/src/main/java/com/simibubi/create/foundation/block/connected/CTModel.java`
+- Create `CTSpriteShiftEntry.java`: `https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/src/main/java/com/simibubi/create/foundation/block/connected/CTSpriteShiftEntry.java`
+- Create `BakedQuadHelper.java`: `https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/src/main/java/com/simibubi/create/foundation/model/BakedQuadHelper.java`
 
-### 3.2 草方块为何多一层侧面
+### 3.2 Why the grass block has an extra side layer
 
-Minecraft 1.21.1 的原版 `grass_block.json` 明确包含两个尺寸相同的立方体元素：
+The vanilla `grass_block.json` of Minecraft 1.21.1 explicitly contains two cube elements of the same size:
 
-- 第一层四个侧面使用 `minecraft:block/grass_block_side`。
-- 第二层四个侧面使用 `minecraft:block/grass_block_side_overlay`，带 `tintindex: 0`。
+- The four side faces of the first layer use `minecraft:block/grass_block_side`.
+- The four side faces of the second layer use `minecraft:block/grass_block_side_overlay` with `tintindex: 0`.
 
-游戏依赖透明裁剪与生物群系染色把两层合成为最终侧面。导出器当前忠实捕获两个共面 Quad，因此 Blender 会直接看到第二层几何。这不是重复捕获错误，而是原版模型结构被完整暴露。
+The game relies on transparent clipping and biome tinting to composite the two layers into the final side. The exporter currently captures the two coplanar quads faithfully, so Blender sees the second layer of geometry directly. This is not a duplicate-capture bug, but the vanilla model structure being fully exposed.
 
-原版资源：`https://assets.mcasset.cloud/1.21.1/assets/minecraft/models/block/grass_block.json`
+Vanilla resource: `https://assets.mcasset.cloud/1.21.1/assets/minecraft/models/block/grass_block.json`
 
-### 3.3 输入框为何触发 E 键物品栏
+### 3.3 Why the input box triggers the E-key inventory
 
-当前 `ExportWandScreen.keyPressed` 对非 Enter、非 Esc 按键调用 `super.keyPressed`。调用链进入 `AbstractContainerScreen.keyPressed` 后，会检查 `minecraft.options.keyInventory`；字符 `E` 的文本写入发生在后续 `charTyped`，所以 `EditBox.keyPressed(E)` 通常不会消费物理按键，容器层随后执行 `onClose()`。
+The current `ExportWandScreen.keyPressed` calls `super.keyPressed` for keys that are neither Enter nor Esc. The call chain enters `AbstractContainerScreen.keyPressed`, which checks `minecraft.options.keyInventory`; the text write of the character `E` happens in the later `charTyped`, so `EditBox.keyPressed(E)` normally does not consume the physical key, and the container layer then runs `onClose()`.
 
-当前实现即使在调用 `super.keyPressed` 后返回 `true` 也已经太晚，因为关闭动作已发生。输入隔离必须在进入 `AbstractContainerScreen` 的快捷键分支之前完成。
+Even returning `true` after calling `super.keyPressed` is already too late in the current implementation, because the closing action has happened. Input isolation must be completed before entering the hotkey branch of `AbstractContainerScreen`.
 
-## 4. 方案比较
+## 4. Approach comparison
 
-### 4.1 实际 UV 反查 Sprite，采用
+### 4.1 Look up the Sprite from the actual UVs, adopted
 
-根据 Quad 四个顶点的实际图集 UV，从相同 `TextureAtlas` 的已注册 Sprite 中查找完整覆盖该 UV 区域的真实 Sprite。
+From the actual atlas UVs of the Quad's four vertices, find the real Sprite that fully covers that UV region among the registered Sprites of the same `TextureAtlas`.
 
-优点：
+Advantages:
 
-- 不依赖 Create 类型。
-- 兼容其他采用 Sprite Shift、但保留旧 `BakedQuad.sprite` 元数据的模组。
-- 继续输出可编辑的独立 PNG。
-- 保留游戏已经算好的连接索引，无需复制模组算法。
+- Does not depend on Create types.
+- Compatible with other mods that use Sprite Shift but keep the old `BakedQuad.sprite` metadata.
+- Continues to output editable standalone PNGs.
+- Keeps the connection indices the game has already computed, without copying the mod's algorithm.
 
-代价：需要建立可缓存的图集空间索引，并处理浮点边界。
+Cost: a cacheable atlas spatial index has to be built, and floating-point boundaries have to be handled.
 
-### 4.2 整张图集回退，不采用
+### 4.2 Whole-atlas fallback, not adopted
 
-对异常 Quad 导出整张方块图集并保留原始 UV。
+For abnormal Quads, export the whole block atlas and keep the original UVs.
 
-优点是最接近 GPU 实际采样。代价是纹理巨大、输出臃肿、Blender 材质难以编辑，也破坏当前独立 Sprite 输出约定。
+The advantage is that it is closest to the GPU's actual sampling. The cost is a huge texture, bloated output, materials that are hard to edit in Blender, and breaking the current standalone-Sprite output convention.
 
-### 4.3 Create 专用适配器，不采用
+### 4.3 Create-specific adapter, not adopted
 
-通过 Create 或 Catnip 类直接获取目标 Sprite。
+Obtain the target Sprite directly through Create or Catnip classes.
 
-该路线对单一版本精确，但与内部类、方法签名和加载顺序强耦合，也会把通用导出器变成 Create 特判集合。
+This route is precise for a single version, but it is tightly coupled to internal classes, method signatures and load order, and would turn the generic exporter into a collection of Create special cases.
 
-## 5. 总体架构
+## 5. Overall architecture
 
-新增三个职责明确的组件：
+Three new components with clear responsibilities:
 
 ```text
 BakedQuad
-  → 捕获原始顶点与实际图集 UV
+  → capture the raw vertices and actual atlas UVs
   → AtlasSpriteResolver
   → SpriteTextureExtractor
   → BlockPrimitiveRouter
-      → Section 主体流
-      → Selection 全局草侧 Overlay 流
+      → Section body stream
+      → Selection-global grass side Overlay stream
   → StreamingSceneSession
       → glTF Writer
       → OBJ Writer
 ```
 
-GUI 输入独立走：
+GUI input follows its own path:
 
 ```text
 GLFW keyPressed / keyReleased / charTyped
-  → ExportWandScreen 输入隔离
-      → 当前 EditBox
-      → GUI 焦点导航
-      → Esc 关闭
-  × 不进入游戏 KeyMapping
+  → ExportWandScreen input isolation
+      → current EditBox
+      → GUI focus navigation
+      → Esc closes
+  × does not enter the game KeyMapping
 ```
 
 ## 6. `AtlasSpriteResolver`
 
-### 6.1 输入与输出
+### 6.1 Input and output
 
-输入：
+Input:
 
 ```text
 declaredSprite
-四个实际 atlas UV
-TextureAtlas 中的 canonical sprites
+the four actual atlas UVs
+canonical sprites in the TextureAtlas
 ```
 
-输出：
+Output:
 
 ```text
 resolvedSprite
 resolutionKind = DECLARED | REDIRECTED | FALLBACK
-可选诊断
+optional diagnostic
 ```
 
-解析结果使用 canonical `TextureAtlasSprite`，不继续使用模组临时包装 Sprite。
+The resolution result uses the canonical `TextureAtlasSprite` and no longer uses temporary wrapper Sprites of mods.
 
-### 6.2 空间索引
+### 6.2 Spatial index
 
-每张 Atlas 在一次导出期间只建立一个 `AtlasSpriteIndex`：
+Each Atlas builds only one `AtlasSpriteIndex` during an export:
 
-- 从 `TextureAtlas.getTextures()` 读取稳定资源 ID 与 canonical Sprite。
-- 使用归一化 UV 空间的 256×256 固定桶索引，避免每个 Quad 线性扫描整张图集。
-- Sprite 插入其覆盖的所有桶；查询使用四个 UV 的包围盒中心桶，再执行精确覆盖检查。
-- 索引按 Atlas 身份缓存，资源重载或下一次导出重新建立。
+- Read the stable resource ID and canonical Sprite from `TextureAtlas.getTextures()`.
+- Use a fixed 256×256 bucket index in normalized UV space, to avoid a linear scan of the whole atlas for every Quad.
+- A Sprite is inserted into all buckets it covers; a query uses the center bucket of the bounding box of the four UVs, then performs an exact coverage check.
+- The index is cached by Atlas identity and rebuilt after a resource reload or for the next export.
 
-固定桶只用于缩小候选集，不参与最终判定。
+The fixed buckets are only used to narrow the candidate set and do not take part in the final decision.
 
-### 6.3 覆盖与选择规则
+### 6.3 Coverage and selection rules
 
-1. 先用 `declaredSprite.contents().name()` 在 Atlas 中取得 canonical 声明 Sprite。
-2. 若 canonical 声明 Sprite 在容差内覆盖全部四个 UV，返回 `DECLARED`。
-3. 否则查询覆盖全部 UV 的候选 Sprite。
-4. 候选唯一时返回该 Sprite。
-5. 多候选时选择 UV 面积最小者；面积相同按资源 ID 字典序稳定选择。
-6. 无候选时返回 canonical 声明 Sprite，并记录 `ATLAS_SPRITE_RESOLUTION_FAILED`。
+1. First get the canonical declared Sprite in the Atlas through `declaredSprite.contents().name()`.
+2. If the canonical declared Sprite covers all four UVs within tolerance, return `DECLARED`.
+3. Otherwise query candidate Sprites that cover all the UVs.
+4. When the candidate is unique, return that Sprite.
+5. With several candidates, choose the one with the smallest UV area; on equal areas choose stably by lexicographic resource ID.
+6. With no candidate, return the canonical declared Sprite and record `ATLAS_SPRITE_RESOLUTION_FAILED`.
 
-容差按候选 Sprite 可推导的 Atlas 尺寸换算，最大为半个 Atlas 像素。容差只用于边界比较，不修改最终 UV。
+The tolerance is converted from the Atlas size derivable from the candidate Sprite, with a maximum of half an Atlas pixel. The tolerance is only used for boundary comparison and never modifies the final UVs.
 
-### 6.4 捕获顺序调整
+### 6.4 Capture order adjustment
 
-`BlockModelExtractor.captureQuad` 必须先通过 `CapturingVertexConsumer` 取得真实 UV，再解析 Sprite。后续步骤改为：
+`BlockModelExtractor.captureQuad` must first obtain the real UVs through `CapturingVertexConsumer` and then resolve the Sprite. The later steps change to:
 
 ```text
 capture raw vertices
@@ -197,38 +197,38 @@ capture raw vertices
 → append routed primitive
 ```
 
-Create 的目标是整张 `*_connected` Sprite。导出其完整纹理表，归一化 UV 仍停留在 Create 已选择的子格中。
+Create's target is the whole `*_connected` Sprite. The complete texture sheet is exported, and the normalized UVs still stay within the sub-cell Create has already chosen.
 
-### 6.5 缓存
+### 6.5 Caching
 
-- `SpriteTextureExtractor.Extraction` 按 canonical Sprite 身份缓存。
-- `TextureRegistry` 继续按稳定 `TextureKey` 去重。
-- 重定向诊断按“声明资源 ID → 目标资源 ID”组合去重，避免每个方块重复刷报告。
+- `SpriteTextureExtractor.Extraction` is cached by canonical Sprite identity.
+- `TextureRegistry` continues to deduplicate by stable `TextureKey`.
+- Redirect diagnostics are deduplicated by the combination "declared resource ID → target resource ID", so the report is not flooded for every block.
 
-## 7. 草方块 Overlay 分流
+## 7. Grass block Overlay routing
 
-### 7.1 分类规则
+### 7.1 Classification rule
 
-新增 `BlockPrimitiveRouter`。分类只依据解析后的稳定纹理资源 ID：
+A new `BlockPrimitiveRouter` is added. Classification relies only on the resolved stable texture resource ID:
 
 ```text
 minecraft:block/grass_block_side_overlay
     → GLOBAL_GRASS_SIDE_OVERLAY
-其他纹理
+other textures
     → SECTION_BLOCKS
 ```
 
-不根据透明度、Tint、像素内容或几何共面关系猜测，以免误拆其他模组材质。
+It does not guess from transparency, tint, pixel content or geometric coplanarity, to avoid wrongly splitting materials of other mods.
 
-### 7.2 对象契约
+### 7.2 Object contract
 
-整个选区最多产生一个对象：
+The whole selection produces at most one object:
 
 ```text
 selection/grass_side_overlay
 ```
 
-其 `CapturedNode.Kind` 使用新增的 `OVERLAY`，并写入：
+Its `CapturedNode.Kind` uses the new `OVERLAY` and writes:
 
 ```json
 {
@@ -238,162 +238,162 @@ selection/grass_side_overlay
 }
 ```
 
-没有草方块 Overlay 时不创建空对象。
+No empty object is created when there is no grass block Overlay.
 
-### 7.3 材质与几何
+### 7.3 Material and geometry
 
-- 使用原 `grass_block_side_overlay` RGBA 纹理。
-- 保留 RenderType 推导出的 Alpha Mode 与双面策略。
-- 保留 `tintindex: 0` 产生的群系顶点色。
-- 保留原始 Quad 拓扑、法线、世界坐标和 UV。
-- 主体草方块继续保留 `grass_block_side`、顶面与底面。
-- Overlay 不计为占位符，不改变扫描方块与渲染方块计数。
+- Uses the original `grass_block_side_overlay` RGBA texture.
+- Keeps the Alpha Mode and double-sided policy derived from the RenderType.
+- Keeps the biome vertex colors produced by `tintindex: 0`.
+- Keeps the original quad topology, normals, world coordinates and UVs.
+- The body grass block still keeps `grass_block_side`, the top face and the bottom face.
+- The Overlay is not counted as a placeholder and does not change the scanned-block and rendered-block counts.
 
-### 7.4 流式写入
+### 7.4 Streaming writes
 
-用户已选择整个选区一个 Overlay 对象，因此 Writer 必须跨 Section 合并逻辑对象，同时避免在捕获线程内囤积全部草地顶点。
+The user chose one Overlay object for the whole selection, so the Writer must merge a logical object across Sections while avoiding hoarding all grass vertices inside the capture thread.
 
 #### glTF
 
-- 每个 Section 可以提交同名 `OVERLAY` 节点片段。
-- `StreamingGltfSession` 按稳定对象键复用同一 Node/Mesh。
-- 每批 Primitive 的二进制顶点与索引仍立即写入 `.bin`。
-- 文档构建器只持续追加 Primitive 描述，不保留历史顶点对象。
+- Each Section can submit a same-named `OVERLAY` node fragment.
+- `StreamingGltfSession` reuses the same Node/Mesh by a stable object key.
+- The binary vertices and indices of each batch of Primitives are still written to `.bin` immediately.
+- The document builder only keeps appending Primitive descriptions and does not retain historical vertex objects.
 
 #### OBJ
 
-- `StreamingObjSession` 将 Overlay Primitive 写入输出事务内的临时片段。
-- 临时片段使用标准 OBJ 负相对索引，使其不依赖最终主体顶点偏移。
-- `finish()` 时只写一次 `o selection_grass_side_overlay`，再追加片段。
-- 临时片段随后删除；取消或异常时由 `OutputTransaction` 清理。
+- `StreamingObjSession` writes Overlay Primitives into a temporary fragment inside the output transaction.
+- The temporary fragment uses standard OBJ negative relative indices, so it does not depend on the final body vertex offset.
+- At `finish()` it writes `o selection_grass_side_overlay` only once and then appends the fragment.
+- The temporary fragment is deleted afterwards; on cancellation or exceptions `OutputTransaction` cleans it up.
 
-这样 Blender 中只出现一个草侧 Overlay 对象，同时保持大选区导出的有界内存特性。
+This way only one grass side Overlay object appears in Blender, while keeping the bounded-memory property of large-selection exports.
 
-## 8. GUI 键盘与输入法隔离
+## 8. GUI keyboard and input method isolation
 
-### 8.1 基本规则
+### 8.1 Basic rules
 
-- `ExportWandScreen.passEvents = false`。
-- Esc 直接调用 Screen 关闭逻辑并返回 `true`。
-- Enter 或小键盘 Enter 只提交当前聚焦的坐标端点或导出名并返回 `true`。
-- Tab 只调用 GUI 焦点导航；无论父类返回值如何，Screen 最终返回 `true`。
-- 其他物理按键不得进入 `AbstractContainerScreen` 的物品栏、热栏、丢弃或模组快捷键分支。
+- `ExportWandScreen.passEvents = false`.
+- Esc directly calls the Screen close logic and returns `true`.
+- Enter or keypad Enter only commits the currently focused coordinate endpoint or export name and returns `true`.
+- Tab only calls GUI focus navigation; whatever the parent class returns, the Screen finally returns `true`.
+- Other physical keys must not enter the inventory, hotbar, drop or mod hotkey branches of `AbstractContainerScreen`.
 
-### 8.2 文本框路由
+### 8.2 Text box routing
 
-输入框聚焦时：
+When an input box is focused:
 
-- `keyPressed` 直接调用当前 `EditBox.keyPressed`，随后无条件返回 `true`。
-- `keyReleased` 直接调用当前焦点控件，随后无条件返回 `true`。
-- `charTyped` 直接调用当前 `EditBox.charTyped`，随后无条件返回 `true`。
+- `keyPressed` directly calls the current `EditBox.keyPressed` and then unconditionally returns `true`.
+- `keyReleased` directly calls the currently focused widget and then unconditionally returns `true`.
+- `charTyped` directly calls the current `EditBox.charTyped` and then unconditionally returns `true`.
 
-这允许 Ctrl+A/C/V/X、退格、Delete、方向键、英文字符和中文输入法提交字符作用于输入框。字符键的 `keyPressed` 即使被 `EditBox` 返回为未处理，也必须由 Screen 消费；真正文本仍通过后续 `charTyped` 写入。
+This lets Ctrl+A/C/V/X, Backspace, Delete, the arrow keys, Latin characters and characters committed by Chinese input methods act on the input box. Even if `EditBox` reports the `keyPressed` of a character key as unhandled, the Screen must consume it; the real text is still written through the later `charTyped`.
 
-### 8.3 无输入框焦点
+### 8.3 No input box focus
 
-除 Esc 和 Tab 外，E、WASD、数字热栏键、Q、F、模组快捷键及字符事件全部返回 `true`，不改变玩家、容器、物品栏或全局按键状态。
+Except for Esc and Tab, E, WASD, the number hotbar keys, Q, F, mod hotkeys and character events all return `true`, and change no player, container, inventory or global key state.
 
-关闭 GUI 后不修改任何 `KeyMapping`，下一帧由 Minecraft 正常恢复游戏输入。
+After the GUI closes no `KeyMapping` is modified, and Minecraft restores game input normally on the next frame.
 
-## 9. 诊断与错误处理
+## 9. Diagnostics and error handling
 
-新增诊断码：
+New diagnostic codes:
 
-- `ATLAS_SPRITE_REDIRECTED`：INFO，记录声明 Sprite 与真实 Sprite。
-- `ATLAS_SPRITE_RESOLUTION_FAILED`：WARNING，记录 Atlas、声明 Sprite 与 UV 包围盒。
-- `GLOBAL_OVERLAY_SPOOL_FAILED`：FAILURE，记录临时片段阶段与异常。
+- `ATLAS_SPRITE_REDIRECTED`: INFO, records the declared Sprite and the real Sprite.
+- `ATLAS_SPRITE_RESOLUTION_FAILED`: WARNING, records the Atlas, the declared Sprite and the UV bounding box.
+- `GLOBAL_OVERLAY_SPOOL_FAILED`: FAILURE, records the temporary fragment stage and the exception.
 
-规则：
+Rules:
 
-- Sprite 重定向成功不使导出变成 `completed_with_warnings`。
-- 反查失败保留声明 Sprite，继续导出其他对象。
-- 单个 Overlay Quad 分类失败时留在 Section 主体，不丢弃几何。
-- Overlay 临时片段写入失败属于输出事务失败，不发布不完整目录。
-- glTF Overlay 合并键冲突、Kind 不一致或 Extras 不一致时失败，禁止静默合并语义不同的节点。
-- GUI 输入隔离不捕获或吞掉系统级窗口关闭事件。
+- A successful Sprite redirect does not turn the export into `completed_with_warnings`.
+- A failed lookup keeps the declared Sprite and continues exporting other objects.
+- When the classification of a single Overlay Quad fails, it stays in the Section body and the geometry is not discarded.
+- A failed write of the Overlay temporary fragment is an output transaction failure, and no incomplete directory is published.
+- A glTF Overlay merge key conflict, Kind mismatch or Extras mismatch fails, and nodes with different semantics are never silently merged.
+- GUI input isolation does not catch or swallow system-level window close events.
 
-## 10. 自动测试设计
+## 10. Automated test design
 
-### 10.1 Sprite 解析
+### 10.1 Sprite resolution
 
-- 声明 Sprite 完整覆盖四个 UV时返回 `DECLARED`。
-- Create 风格夹具：声明普通 Sprite、UV 指向 `*_connected`，返回目标 Sprite。
-- 目标为 2×2、4×4 与 8×8 纹理表时保留正确局部 UV。
-- 半像素边界容差不误判到邻接 Sprite。
-- 多候选选择面积最小者，并用资源 ID 稳定打破平局。
-- 无候选返回声明 Sprite并生成一次警告。
-- 同一重定向重复出现时只记录一次 INFO。
-- 普通动画 Sprite 保持现有首帧与动画旁车行为。
+- A declared Sprite that fully covers the four UVs returns `DECLARED`.
+- Create-style fixture: a declared ordinary Sprite with UVs pointing to `*_connected` returns the target Sprite.
+- When the target is a 2×2, 4×4 or 8×8 texture sheet the correct local UVs are kept.
+- The half-pixel boundary tolerance does not misjudge into an adjacent Sprite.
+- With several candidates the smallest area is chosen, and ties are broken stably by resource ID.
+- With no candidate the declared Sprite is returned and one warning is produced.
+- When the same redirect repeats, INFO is recorded only once.
+- Ordinary animated Sprites keep the existing first-frame and animation sidecar behavior.
 
-### 10.2 方块捕获与 Overlay
+### 10.2 Block capture and Overlay
 
-- 测试 BakedModel 返回“旧 Sprite 元数据 + 目标 Atlas UV”的 Quad，导出材质必须引用 connected TextureKey。
-- 普通方块的材质与 UV 回归不变。
-- `grass_block_side` 留在 Section 主体。
-- `grass_block_side_overlay` 进入 `OVERLAY` 路由。
-- Overlay 保留 MASK/BLEND、Tint 顶点色和 Quad 源拓扑。
-- 无草方块时不创建空 Overlay。
+- A test BakedModel returns a Quad with "old Sprite metadata + target Atlas UVs"; the exported material must reference the connected TextureKey.
+- Material and UV regression for ordinary blocks is unchanged.
+- `grass_block_side` stays in the Section body.
+- `grass_block_side_overlay` goes into the `OVERLAY` route.
+- The Overlay keeps MASK/BLEND, the Tint vertex colors and the quad source topology.
+- No empty Overlay is created when there are no grass blocks.
 
-### 10.3 Writer
+### 10.3 Writers
 
-- 多个 Section 的同名 Overlay 在 glTF 中只产生一个 Node/Mesh。
-- OBJ 中只出现一次 `o selection_grass_side_overlay`。
-- Overlay 的全部面、材质和顶点均存在。
-- OBJ 负相对索引导入结构合法。
-- Overlay 临时片段在成功、取消与异常后均不存在。
-- glTF 继续通过内部校验，OBJ/MTL 路径保持有效。
+- Same-named Overlays from several Sections produce only one Node/Mesh in glTF.
+- `o selection_grass_side_overlay` appears only once in OBJ.
+- All faces, materials and vertices of the Overlay exist.
+- The OBJ negative relative indices import with a legal structure.
+- The Overlay temporary fragment does not exist after success, cancellation and exceptions.
+- glTF keeps passing the internal validation, and the OBJ/MTL path stays valid.
 
-### 10.4 GUI 输入
+### 10.4 GUI input
 
-- 名称框聚焦时，`E` 的 `keyPressed` 不关闭 GUI，后续 `charTyped('e')` 写入文本。
-- 中文字符通过 `charTyped` 写入并可由 `ExportName` 接受。
-- 坐标框接受数字、负号、退格与方向键。
-- Ctrl+A/C/V/X 只作用于当前输入框。
-- Enter 只提交当前字段，不启动导出。
-- Tab 只移动 GUI 焦点。
-- Esc 关闭 GUI。
-- E、WASD、数字热栏键、Q、F 与未绑定模组按键均被消费。
-- `keyReleased` 不泄漏到游戏。
-- GUI 关闭后不残留被修改的全局 KeyMapping 状态。
+- With the name box focused, the `keyPressed` of `E` does not close the GUI, and the following `charTyped('e')` writes the text.
+- Chinese characters are written through `charTyped` and accepted by `ExportName`.
+- The coordinate box accepts digits, the minus sign, Backspace and the arrow keys.
+- Ctrl+A/C/V/X act only on the current input box.
+- Enter only commits the current field and does not start the export.
+- Tab only moves GUI focus.
+- Esc closes the GUI.
+- E, WASD, the number hotbar keys, Q, F and unbound mod keys are all consumed.
+- `keyReleased` does not leak into the game.
+- After the GUI closes no modified global KeyMapping state remains.
 
-## 11. 人工视觉验收
+## 11. Manual visual acceptance
 
-人工视觉验收由项目所有者执行，自动化不得自行宣称视觉通过。
+Manual visual acceptance is performed by the project owner, and automation must not declare a visual pass on its own.
 
-### 11.1 Create 对照
+### 11.1 Create comparison
 
-1. 在游戏中搭建至少包含安山机壳、黄铜机壳、流体储罐或保险库的连续结构。
-2. 保存目标图或现场截图。
-3. 导出同一选区并导入 Blender。
-4. 对照每个边、角、中心格与纹理方向。
-5. 检查连接纹理没有退回单块重复，也没有跨 Sprite 采样。
+1. In the game, build a continuous structure containing at least andesite casings, brass casings, a fluid tank or a vault.
+2. Save a target image or an on-site screenshot.
+3. Export the same selection and import it into Blender.
+4. Compare every edge, corner, center cell and texture direction.
+5. Check that the connected textures did not fall back to a single-block repeat and did not sample across Sprites.
 
-### 11.2 草方块
+### 11.2 Grass block
 
-1. 导出包含多个生物群系色调草方块的选区。
-2. Blender Outliner 中确认只有一个 `selection/grass_side_overlay`。
-3. 隐藏该对象后，只剩底层泥土草边；恢复后视觉与游戏一致。
-4. 检查 Overlay 没有被烘焙、丢色或拆成大量对象。
+1. Export a selection containing grass blocks of several biome tints.
+2. Confirm in the Blender Outliner that there is only one `selection/grass_side_overlay`.
+3. After hiding that object only the underlying dirt-grass edge remains; after restoring it the look matches the game.
+4. Check that the Overlay was not baked, did not lose color and was not split into a large number of objects.
 
-### 11.3 输入法与快捷键
+### 11.3 Input method and hotkeys
 
-1. 名称框输入包含 `e` 的英文名称。
-2. 使用中文输入法输入中文导出名。
-3. 分别按 E、WASD、1 至 9、Q、F 与已安装模组快捷键。
-4. GUI 全程保持打开，玩家与物品栏无响应。
-5. Esc 关闭后再次测试游戏快捷键，确认立即恢复。
+1. Type an English name containing `e` in the name box.
+2. Type a Chinese export name with a Chinese input method.
+3. Press E, WASD, 1 to 9, Q, F and installed mod hotkeys separately.
+4. The GUI stays open throughout, and the player and inventory do not respond.
+5. After closing with Esc, test the game hotkeys again and confirm they are restored immediately.
 
-## 12. 发布验收
+## 12. Release acceptance
 
-候选版本只有在以下机械检查完成后才可交给人工视觉验收：
+The candidate version may be handed to manual visual acceptance only after the following mechanical checks are done:
 
-- 相关定向测试全部通过。
-- `clean test build` 成功。
-- `runServerSmoke` 成功。
-- 生产 JAR 不包含 Create、Catnip 测试替身或 testmod 类。
-- `jdeps` 不出现 Create/Catnip 字节码依赖。
-- glTF 内部校验通过。
-- OBJ/MTL 结构检查通过。
-- 报告能追溯 Sprite 重定向与 Overlay 对象。
+- All related targeted tests pass.
+- `clean test build` succeeds.
+- `runServerSmoke` succeeds.
+- The production JAR contains no Create or Catnip test doubles or testmod classes.
+- `jdeps` shows no Create/Catnip bytecode dependency.
+- The glTF internal validation passes.
+- The OBJ/MTL structure check passes.
+- The report can trace the Sprite redirects and the Overlay object.
 
-最终视觉通过结论只由项目所有者在真实 Create 场景和 Blender 中给出。
+The final visual pass conclusion is given only by the project owner in a real Create scene and in Blender.

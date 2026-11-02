@@ -109,7 +109,7 @@ Do not add this gate to `handleUpdateCoordinate` or `handleCaptureFeet`.
 Add:
 
 ```json
-"mcgltf.error.workstation.no_export_permission": "只有服务器管理员可以使用工作台导出"
+"mcgltf.error.workstation.no_export_permission": "Only server administrators may export from this workstation" (zh_cn translation of the same message)
 ```
 
 and:

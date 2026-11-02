@@ -1,106 +1,106 @@
-# MineToMesh 1.2.0 客户端手工验收矩阵
+# MineToMesh 1.2.0 Manual Client Acceptance Matrix
 
-目标环境：Minecraft 1.21.1、NeoForge 21.1.244，客户端和服务端均安装 `MineToMesh-1.2.0.jar`。除权限场景外，使用同一根导出魔杖依次执行，检查声音、物品组件、Overlay、GUI 与导出目录。
+Target environment: Minecraft 1.21.1 and NeoForge 21.1.244, with `MineToMesh-1.2.0.jar` installed on both client and server. Except for the permission scenarios, use the same Export Wand throughout and check sound, item components, Overlay, GUI and the export directory.
 
-## 0.5.1 硬身份迁移
+## 0.5.1 hard identity migration
 
-以下破坏性表现必须在旧 0.5.0 世界的副本中人工确认，自动测试只验证机械结构。
+The following destructive behaviors must be confirmed manually on a copy of an old 0.5.0 world; automated tests only verify the mechanical structure.
 
-| 场景 | 操作 | 预期结果 |
+| Scenario | Action | Expected result |
 |---|---|---|
-| 新 Mod 身份 | 启动客户端并查看模组列表 | 只显示 `MineToMesh 0.5.1 (minetomesh)`，不加载旧 Mod ID |
-| 旧世界注册项 | 备份后用 0.5.1 打开含旧魔杖的 0.5.0 世界副本 | 旧身份按 NeoForge 硬迁移规则失效；无 Missing Mapping 兼容 |
-| 旧魔杖数据 | 检查旧物品并获取一根 0.5.1 新魔杖 | 旧魔杖数据不迁移；新魔杖可独立创建选择与导出 |
-| 命令切换 | 分别输入 `/minetomesh status` 与旧命令 | 新命令注册；旧命令不存在且无别名 |
-| 输出目录切换 | 保留已有 `.minecraft/mcgltf-exports/` 后完成一次新导出 | 旧目录原样保留，新结果只写入 `.minecraft/minetomesh-exports/` |
-| 双端一致性 | 客户端与服务端均安装 0.5.1 后连接 | 握手与魔杖网络载荷正常，无旧命名空间兼容通道 |
+| New Mod identity | Start the client and open the mod list | Only `MineToMesh 0.5.1 (minetomesh)` is shown; the old Mod ID is not loaded |
+| Old world registry entries | After a backup, open a copy of a 0.5.0 world containing old wands with 0.5.1 | The old identity is invalidated under NeoForge hard-migration rules; no Missing Mapping compatibility |
+| Old wand data | Inspect the old item and obtain a new 0.5.1 wand | Old wand data is not migrated; the new wand can independently create selections and exports |
+| Command switch | Enter `/minetomesh status` and the old command | The new command is registered; the old command does not exist and has no alias |
+| Output directory switch | Keep an existing `.minecraft/mcgltf-exports/` and complete one new export | The old directory is left untouched; new results are written only to `.minecraft/minetomesh-exports/` |
+| Client/server consistency | Connect with 0.5.1 installed on both client and server | Handshake and wand network payloads work, with no legacy-namespace compatibility channel |
 
-## 魔杖输入与选区
+## Wand input and selection
 
-| 场景 | 操作 | 预期结果 |
+| Scenario | Action | Expected result |
 |---|---|---|
-| 无裂纹左键 | 普通左键石头 | 方块无裂纹且不被破坏，POS1 更新，只播放取点声音 |
-| 容器安全右键 | 普通右键箱子 | 箱子不打开，POS2 更新，只播放取点声音 |
-| 左键空气两格 | 准星前方没有方块时普通左键 | POS1 为眼睛沿视线前方两格所在空气方块 |
-| 右键空气两格 | 准星前方没有方块时普通右键 | POS2 为眼睛沿视线前方两格所在空气方块 |
-| Shift+右键方块 | 潜行右键任意方块 | GUI 打开，方块自身不交互 |
-| Shift+右键空气 | 潜行右键空气 | 同一 GUI 打开 |
-| Shift+左键空气清除 | 完整选区后潜行左键空气 | 两端点清空，名称和 Overlay 偏好保留 |
-| Shift+左键方块 | 潜行左键方块 | POS1 更新，不触发清除 |
-| 跨维度拒绝 | 主世界设 POS1，进入下界尝试设 POS2 | 操作拒绝，主世界 POS1 原样保留 |
-| 高度边界 | 分别选择最低 Y 与最高有效 Y | `minBuildHeight <= y < maxBuildHeight` 接受，越界拒绝 |
-| 双魔杖隔离 | 两根魔杖分别设置不同选区和名称 | `wandId`、端点、名称和开关互不串线 |
+| Crack-free left click | Plain left click on stone | The block shows no cracks and is not broken, POS1 updates, and only the point-set sound plays |
+| Container-safe right click | Plain right click on a chest | The chest does not open, POS2 updates, and only the point-set sound plays |
+| Left click air, two blocks | Plain left click with no block in front of the crosshair | POS1 is the air block two blocks ahead of the eyes along the line of sight |
+| Right click air, two blocks | Plain right click with no block in front of the crosshair | POS2 is the air block two blocks ahead of the eyes along the line of sight |
+| Shift + right click block | Sneak and right click any block | The GUI opens and the block itself is not interacted with |
+| Shift + right click air | Sneak and right click air | The same GUI opens |
+| Shift + left click air clears | With a complete selection, sneak and left click air | Both endpoints are cleared; the name and Overlay preference are kept |
+| Shift + left click block | Sneak and left click a block | POS1 updates and no clear is triggered |
+| Cross-dimension rejection | Set POS1 in the Overworld, then enter the Nether and try to set POS2 | The action is rejected and the Overworld POS1 is kept unchanged |
+| Height limits | Select the lowest Y and the highest valid Y | `minBuildHeight <= y < maxBuildHeight` is accepted; out-of-range values are rejected |
+| Two-wand isolation | Set different selections and names on two wands | `wandId`, endpoints, names and toggles never interfere with each other |
 
-## GUI、Overlay 与生命周期
+## GUI, Overlay and lifecycle
 
-| 场景 | 操作 | 预期结果 |
+| Scenario | Action | Expected result |
 |---|---|---|
-| 坐标编辑 | 输入完整 X/Y/Z，回车或失焦 | 三项均可解析才发送完整端点；非法项标红 |
-| 步进 | 按钮、滚轮、Shift+滚轮 | 分别为 `±1`、`±1`、`±10` |
-| 名称持久化 | 修改导出名后回车或失焦，关闭重开 | 同一根魔杖保留名称 |
-| Overlay 深度 | 选区穿过墙体 | 橙色体积和蓝色边线被实体方块正常遮挡 |
-| Overlay 隐藏与恢复 | 手持开启 Overlay 的魔杖，切到其他物品，再切回 | 切走立即隐藏，重新手持同一根魔杖后恢复 |
-| 手持预览与锁定独立 | 分别切换手持预览、锁定选区和导出玩家 | 三个 60×16 开关互不改变彼此状态；导出玩家不影响任何预览 |
-| 脱离魔杖仍显示 | 锁定完整选区后切换热栏，并把魔杖放入箱子 | 手持预览消失，锁定框持续显示 |
-| 锁定跨重启 | 锁定后退出进程，重新启动并进入同一世界或服务器 | 无需持有魔杖即恢复锁定框，配置位于 `config/minetomesh/locked-selections.json` |
-| 跨世界或服务器隔离 | 在世界 A 锁定后进入世界 B 或另一服务器 | 世界 B 不显示世界 A 的框；返回世界 A 后记录仍在 |
-| 维度隐藏与恢复 | 主世界锁定后进入下界，再返回主世界 | 下界因维度不匹配而隐藏，返回原维度后恢复且记录未删除 |
-| 替换锁定 | 已有锁定时在 GUI 输入另一完整选区并点击锁定选区 | 当前 Profile 只保留新选区，旧框消失 |
-| 解除锁定 | GUI 坐标与当前锁定一致时再次点击锁定选区 | 只删除当前世界或服务器 Profile 的记录，手持预览状态不变 |
-| 相同快照去重 | 手持魔杖选区与锁定选区完全相同 | 每帧只绘制一个框；两者不同则按手持、锁定顺序同时绘制 |
-| 主手优先 | 主手和副手各持完整魔杖 | 显示主手魔杖选区；主手无可显示选区时回退副手 |
-| 移动魔杖使菜单失效 | GUI 打开时移动、替换或丢弃绑定槽位物品 | GUI 关闭；若正在导出则任务取消 |
-| 关闭即取消 | 大选区导出时按 Esc | 事务目录清理，无正式半成品 |
-| 重连授权生命周期 | 世界 A 导出、退出，再进入世界 B 重新导出 | 第二次授权正常抵达，不停在“等待服务端授权” |
-| 维度授权 | 选区与玩家当前维度不一致时请求导出 | 服务端拒绝，不启动客户端捕获 |
+| Coordinate editing | Enter complete X/Y/Z, then press Enter or lose focus | The complete endpoint is sent only when all three fields parse; invalid fields are marked red |
+| Stepping | Buttons, wheel, Shift + wheel | `±1`, `±1` and `±10` respectively |
+| Name persistence | Edit the export name, press Enter or lose focus, then close and reopen | The same wand keeps its name |
+| Overlay depth | The selection passes through a wall | The orange volume and blue edge lines are occluded normally by solid blocks |
+| Overlay hide and restore | Hold a wand with Overlay on, switch to another item, then switch back | It hides immediately when switched away and returns when the same wand is held again |
+| Preview and lock independence | Toggle `Preview`, `Lock` and `Players` separately | The three 60×16 toggles never change each other's state; `Players` does not affect any preview |
+| Still shown without the wand | Lock a complete selection, switch hotbar slots, and put the wand into a chest | The hand preview disappears and the lock box keeps showing |
+| Lock survives restart | Lock, quit the process, restart and enter the same world or server | The lock box returns without holding the wand; the config is at `config/minetomesh/locked-selections.json` |
+| Cross-world or server isolation | Lock in world A, then enter world B or another server | World B does not show world A's box; the record is still there after returning to world A |
+| Dimension hide and restore | Lock in the Overworld, enter the Nether, then return to the Overworld | The box is hidden in the Nether because the dimension does not match, and is restored after returning with the record not deleted |
+| Replace lock | With an existing lock, enter another complete selection in the GUI and click `Lock` | The current profile keeps only the new selection and the old box disappears |
+| Remove lock | Click `Lock` again while the GUI coordinates match the current lock | Only the current world or server profile's record is deleted; the hand preview state is unchanged |
+| Identical snapshot dedup | The held wand's selection is identical to the locked selection | Only one box is drawn per frame; if they differ, both are drawn in hand-then-lock order |
+| Main hand priority | Hold complete wands in both the main hand and off hand | The main hand wand's selection is shown; the off hand is the fallback when the main hand has nothing to show |
+| Moving the wand invalidates the menu | While the GUI is open, move, replace or drop the item in the bound slot | The GUI closes; a running export is cancelled |
+| Close cancels | Press Esc during a large-selection export | The transaction directory is cleaned up and no half-finished official output remains |
+| Reconnect grant lifecycle | Export in world A, quit, enter world B and export again | The second grant arrives normally and does not stall at "Waiting for server authorization" |
+| Dimension grant | Request an export while the selection's dimension differs from the player's current one | The server rejects it and no client capture starts |
 
-## 权限矩阵
+## Permission matrix
 
-| 场景 | 环境 | 预期结果 |
+| Scenario | Environment | Expected result |
 |---|---|---|
-| 普通玩家 | 专用服务器，权限低于 2 | 可取点和编辑，导出请求被拒绝 |
-| 管理员 | 专用服务器，权限等级 2 或更高 | 导出授权通过 |
-| 单人模式 | 本地整合服务器，无命令权限 | 单人模式旁路权限检查，导出授权通过 |
-| 服务端隔离 | 无图形环境启动专用服务器 | 输出 `MINETOMESH_SERVER_READY`，无客户端类链接错误 |
+| Ordinary player | Dedicated server, permission below 2 | Can set points and edit; the export request is rejected |
+| Administrator | Dedicated server, permission level 2 or higher | The export grant is approved |
+| Singleplayer | Local integrated server without command permission | Singleplayer bypasses the permission check and the export grant is approved |
+| Server isolation | Start a dedicated server in a headless environment | Prints `MINETOMESH_SERVER_READY` with no client-class linkage errors |
 
-## 文件与 Blender 闭环
+## Files and the Blender loop
 
-| 场景 | 设置 | 预期结果 |
+| Scenario | Setup | Expected result |
 |---|---|---|
-| 原版方块 | 石头、草、树叶、玻璃、水、箱子 | glTF、BIN、USDA、纹理和 `report.json` 齐全；不生成 OBJ/MTL |
-| 实体与方块实体 | 牛、盔甲架、箱子、告示牌 | 几何和纹理出现，跳过文本、阴影与火焰 |
-| 模组渲染 | Create 6.0.10、Flywheel 1.0.6、Touhou Little Maid 1.5.3 | 齿轮箱、储液罐和女仆无错误占位符，后端状态恢复 |
-| glTF 导入 | 在 Blender 5.2 导入 `.gltf` | 层级、比例、轴向、材质、UV 正确，面为三角形 |
-| USDA / OpenUSD 导入 | 在 Blender 5.2 通过 Universal Scene Description 导入 `.usda` | 源 Quad 保留为四边面，所有 Mesh 均为 `subdivisionScheme = "none"` |
-| 非对称坐标方位 | 在选区东侧放金块、西侧放钻石块，分别导入 glTF 与 USDA | 两种格式均无镜像；Minecraft +X 对应 Blender +X，材质、法线和正面方向正确 |
-| USDA 材质 | 检查草、树叶、玻璃、灯与像素纹理 | PreviewSurface 绑定正常；Tint、Cutout、Blend、发光可辨认；若导入器忽略 `minetomesh:samplerMode`，将 Image Texture 手动设为 `Closest` |
-| Powered Rail 精确共面 | 导出上下表面完全重叠的充能铁轨并近距离观察 | 所有 Quad 保留；后续层沿自身法线以 `1/1024` 格分层，无黑面与闪烁 |
-| 草侧 Overlay 分层 | 导出草方块侧面并隐藏 Overlay 对象 | 底层与 Tint Overlay 均存在，显示时无 Z-fighting，隐藏后底层仍完整 |
-| 农作物与普通静态块 | 同时导出小麦、交叉面植物和石头 | 非重叠面位置不变，交叉面和普通方块拓扑无额外漂移 |
-| 层级与全局合批 | 检查 Chunks、BlockEntities、Entities、Placeholders、Overlays | 层级完整；Create 方块实体按完整材质键全局合批 |
-| 无 USDA 临时片段 | 完成一次导出并取消一次大选区导出 | 成功目录与临时事务目录均不残留 `.usdapart` |
-| Khronos 校验 | 对 glTF 运行 Validator | `numErrors: 0` |
-| 未加载区块 | 选区跨越视距外区块 | 不强制加载新区块，`report.json` 记录缺失区块 |
-| 同名导出 | 连续导出同名两次 | 生成 `<名称>/` 与 `<名称>-2/` |
+| Vanilla blocks | Stone, grass, leaves, glass, water, chest | glTF, BIN, USDA, textures and `report.json` are all present; no OBJ/MTL is generated |
+| Entities and block entities | Cow, armor stand, chest, sign | Geometry and textures appear; text, shadows and fire are skipped |
+| Modded rendering | Create 6.0.10, Flywheel 1.0.6, Touhou Little Maid 1.5.3 | Gearbox, fluid tank and maid have no error placeholders, and the backend state is restored |
+| glTF import | Import the `.gltf` in Blender 5.2 | Hierarchy, scale, axes, materials and UVs are correct, and faces are triangles |
+| USDA / OpenUSD import | Import the `.usda` in Blender 5.2 through Universal Scene Description | Source quads are kept as quads, and every mesh has `subdivisionScheme = "none"` |
+| Asymmetric coordinate orientation | Place a gold block on the east side and a diamond block on the west side of the selection, then import both glTF and USDA | Neither format is mirrored; Minecraft +X maps to Blender +X, and materials, normals and front-face direction are correct |
+| USDA materials | Check grass, leaves, glass, lamps and pixel textures | PreviewSurface binds correctly; tint, cutout, blend and emission are recognizable; if the importer ignores `minetomesh:samplerMode`, set the Image Texture to `Closest` manually |
+| Powered Rail exact coplanar | Export a powered rail whose top and bottom surfaces overlap exactly and inspect it up close | All quads are kept; later layers are offset by `1/1024` block along their own normals, with no black faces or flicker |
+| Grass side Overlay layering | Export grass block sides and hide the Overlay object | Both the base layer and the tint Overlay exist, there is no Z-fighting when shown, and the base layer stays complete when hidden |
+| Crops and ordinary static blocks | Export wheat, a cross-shaped plant and stone together | Non-overlapping faces keep their positions, and cross-shaped and ordinary block topology shows no extra drift |
+| Hierarchy and global batching | Check Chunks, BlockEntities, Entities, Placeholders, Overlays | The hierarchy is complete; Create block entities are batched globally by complete material key |
+| No USDA temporary fragments | Complete one export and cancel one large-selection export | Neither the success directory nor the temporary transaction directory leaves any `.usdapart` |
+| Khronos validation | Run the Validator on the glTF | `numErrors: 0` |
+| Unloaded chunks | Select across chunks beyond the render distance | No new chunks are force-loaded, and `report.json` records the missing chunks |
+| Same-name export | Export the same name twice in a row | Produces `<name>/` and `<name>-2/` |
 
-## 1.2.0 项目所有者人工视觉/交互验收
+## 1.2.0 project-owner manual visual/interaction acceptance
 
-以下项目必须由项目所有者在真实游戏和 Blender 中判断，自动化测试只检查结构，不替代视觉结论。
+The following items must be judged by the project owner in the real game and in Blender; automated tests only check structure and do not replace the visual verdict.
 
-| 场景 | 操作 | 预期结果 |
+| Scenario | Action | Expected result |
 |---|---|---|
-| Create 连纹 | 导出拼接的安山机壳、黄铜机壳、储液罐和保险库 | 游戏与 Blender 中边、角、中心纹理一致，不退回单块重复 |
-| Create 动态模型手性 | 东西向放置十节相连传送带，并在其中一侧放非对称标记；同时加入齿轮、传动杆和机械手，分别导入 glTF 与 USDA | 动态模型不沿 Blender Y 镜像；Minecraft +Z 仍对应 Blender -Y；传送带正面与顶点法线朝外 |
-| Create 全局材质合批 | 导出十节同材质传送带，再加入一个使用不同材质键的动态部件 | glTF 与 USDA 中，同一完整 `MaterialKey` 的所有方块实体几何只形成一个网格对象；不同材质键形成独立对象 |
-| 合批边界 | 在同一选区加入牛或盔甲架，并加入普通静态方块 | 方块实体按材质全局合批；普通实体仍各自独立；静态方块仍按 Chunk/Section 结构输出 |
-| 草侧 Overlay 对象 | 导出跨多个 Section 的草地区域 | Outliner 只有一个 `selection/grass_side_overlay`；隐藏后只剩底层侧面 |
-| 英文 E 输入 | 名称框输入 `create_export` | 字符正常进入名称，GUI 不关闭，物品栏不弹出 |
-| 中文输入法 | 名称框输入中文并提交 | 中文名称保存并用于输出目录，快捷键不泄漏 |
-| 关闭后恢复 | Esc 关闭 GUI 后按 E、WASD、1 至 9 | 游戏快捷键立即恢复，无粘滞状态 |
+| Create connected textures | Export joined andesite casings, brass casings, fluid tanks and vaults | Edge, corner and center textures match between the game and Blender, and do not fall back to repeating a single block |
+| Create dynamic model handedness | Place ten connected belts east-west with an asymmetric marker on one side, add a cogwheel, shaft and mechanical arm, and import both glTF and USDA | Dynamic models are not mirrored along Blender Y; Minecraft +Z still maps to Blender -Y; belt front faces and vertex normals point outward |
+| Create global material batching | Export ten belts with the same material, then add one dynamic part with a different material key | In both glTF and USDA, all block-entity geometry with the same complete `MaterialKey` forms a single mesh object; different material keys form separate objects |
+| Batching boundaries | Add a cow or armor stand and ordinary static blocks to the same selection | Block entities are batched globally by material; ordinary entities stay separate; static blocks are still output by Chunk/Section structure |
+| Grass side Overlay object | Export a grass area spanning several Sections | The Outliner shows a single `selection/grass_side_overlay`; only the base side faces remain when it is hidden |
+| Latin E input | Type `create_export` in the name box | The characters enter the name normally, the GUI does not close, and the inventory does not open |
+| CJK input method | Type Chinese text in the name box and commit | The Chinese name is saved and used for the output directory, and no hotkeys leak |
+| Restore after close | Press E, WASD and 1 to 9 after closing the GUI with Esc | Game hotkeys are restored immediately with no sticky state |
 
-## 1.2.0 候选包验收记录
+## 1.2.0 release candidate acceptance record
 
-- 自动化：执行 `clean test build`、`ServerClassIsolationTest` 与 `runServerSmoke`。
-- JAR：文件名必须为 `MineToMesh-1.2.0.jar`，必须包含 `assets/minetomesh/`、`data/minetomesh/`、导出魔杖模型、贴图、配方及 77 张 GUI 切片，不得包含旧包路径、旧资源命名空间、`export_workstation`、测试模组或设计文档。
-- 真实客户端：按本矩阵完成世界 A → 世界 B 的重连闭环，再安装到已知 PCL 实例。
-- Blender 与真实模组视觉验收由人工执行，自动测试不替代最终视觉判断。
+- Automated: run `clean test build`, `ServerClassIsolationTest` and `runServerSmoke`.
+- JAR: the file name must be `MineToMesh-1.2.0.jar`; it must contain `assets/minetomesh/`, `data/minetomesh/`, the Export Wand model, textures, recipe and the 77 GUI slices, and must not contain old package paths, old resource namespaces, `export_workstation`, the test mod or design documents.
+- Real client: follow this matrix to complete the world A → world B reconnect loop, then install into a known PCL instance.
+- Blender and real-mod visual acceptance are performed manually; automated tests do not replace the final visual judgment.

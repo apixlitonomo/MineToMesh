@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Do not dispatch subagents for this project. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add an independent client-only “锁定选区” option that persists one complete selection per single-player world or multiplayer server and renders it without requiring the wand to remain held.
+**Goal:** Add an independent client-only “Lock” option that persists one complete selection per single-player world or multiplayer server and renders it without requiring the wand to remain held.
 
 **Architecture:** `WorldProfileKey` isolates contexts using SHA-256, `LockedSelectionStore` owns deterministic JSON and atomic disk replacement, and `LockedSelectionService` provides toggle/resolve behavior without changing wand components or network payloads. The renderer merges held and locked snapshots with equality deduplication; the screen injects the service and exposes three independent toggles.
 
@@ -341,7 +341,7 @@ assertEquals(new Rect(Layout.LEFT.x() + 136, Layout.LEFT.y() + 144, 60, 16),
         Layout.includePlayersButton());
 ```
 
-Update binding tests to require a `LockedSelectionService` constructor parameter, `toggleLockedSelection()`, no network payload in that method, and labels `手持预览`, `锁定选区`, `导出玩家`.
+Update binding tests to require a `LockedSelectionService` constructor parameter, `toggleLockedSelection()`, no network payload in that method, and labels `Preview`, `Lock`, `Players`.
 
 - [ ] **Step 2: Run and verify RED**
 
@@ -379,12 +379,12 @@ Because `Stream.of` cannot infer primitive optional method references cleanly in
 
 `toggleLockedSelection()` calls the service and sets a local status message:
 
-- `LOCKED`: `选区已锁定`
-- `REPLACED`: `已替换锁定选区`
-- `UNLOCKED`: `选区已解锁`
-- `INCOMPLETE`: `需要完整选区`
-- `NO_PROFILE`: `无法识别当前世界`
-- `WRITE_FAILED`: `保存锁定选区失败`
+- `LOCKED`: `Selection locked`
+- `REPLACED`: `Locked selection replaced`
+- `UNLOCKED`: `Selection unlocked`
+- `INCOMPLETE`: `A complete selection is required`
+- `NO_PROFILE`: `Cannot identify the current world`
+- `WRITE_FAILED`: `Failed to save the locked selection`
 
 Add a local status field with precedence over controller READY text until the user edits coordinates, toggles again, or starts export; otherwise the existing `containerTick()` would erase the result every frame.
 
@@ -472,12 +472,12 @@ git commit -m "feat: persist locked selections per world"
 Require current docs to mention all of:
 
 ```text
-手持预览
-锁定选区
-跨重启
-按存档或服务器隔离
-维度不匹配时隐藏
-返回原维度后恢复
+`Preview`
+`Lock`
+restored across restarts
+isolated per save or server
+hidden when the dimension does not match
+restored when you return to the original dimension
 ```
 
 - [ ] **Step 2: Run and verify RED**

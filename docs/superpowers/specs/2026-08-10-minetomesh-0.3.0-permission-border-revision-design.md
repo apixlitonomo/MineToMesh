@@ -1,54 +1,54 @@
-# MineToMesh 0.3.0 导出权限与物理边框修订设计
+# MineToMesh 0.3.0 Export Permission and Physical Border Revision Design
 
-日期：2026-08-10  
-状态：用户已选择权限方案 A 与边框方案 A
+Date: 2026-08-10  
+Status: the user has chosen permission option A and border option A
 
-## 1. 范围
+## 1. Scope
 
-本修订只改变两项行为：
+This revision changes only two behaviors:
 
-1. 区域导出工作台的导出授权权限。
-2. 可伸缩 GUI 素材的固定边框单位。
+1. The export authorization permission of the region export workstation.
+2. The fixed border unit of the stretchable GUI assets.
 
-坐标编辑、脚下取点、选区显示、导出管线、工作台持久化和现有客户端命令不在本次范围内。
+Coordinate editing, feet-position picking, selection display, the export pipeline, workstation persistence and the existing client commands are out of scope.
 
-## 2. 导出权限
+## 2. Export permission
 
-### 2.1 行为
+### 2.1 Behavior
 
-- 普通玩家仍可打开工作台、编辑共享坐标、使用脚下取点并切换选区显示。
-- 只有处理 `ExportRequestPayload` 时执行权限校验。
-- 本地单人世界运行在集成服务器时，无条件允许当前玩家导出，不要求开启作弊。
-- 专用服务器与非单人集成环境要求玩家拥有 Minecraft 原生指令权限等级 `2` 或更高。
-- 原生 OP 以及由权限系统映射到指令等级 `2+` 的管理员均通过。
-- 无权限请求由服务端发送 `ExportRejectedPayload`，原因键固定为 `mcgltf.error.workstation.no_export_permission`。
-- 客户端不得自行授予权限；最终判定只存在于服务端 Payload 处理链。
+- Ordinary players can still open the workstation, edit the shared coordinates, use feet-position picking and toggle the selection display.
+- The permission check runs only when handling `ExportRequestPayload`.
+- When a local singleplayer world runs on the integrated server, the current player is unconditionally allowed to export, without requiring cheats to be enabled.
+- A dedicated server or a non-singleplayer integrated environment requires the player to have vanilla command permission level `2` or higher.
+- Vanilla OPs and administrators mapped to command level `2+` by a permission system both pass.
+- A request without permission makes the server send `ExportRejectedPayload`, with the reason key fixed to `mcgltf.error.workstation.no_export_permission`.
+- The client must never grant permission itself; the final decision exists only in the server payload handling chain.
 
-### 2.2 校验顺序
+### 2.2 Validation order
 
-1. Payload 发送者必须是 `ServerPlayer`。
-2. 菜单身份、工作台存在性与八格距离校验保持不变。
-3. 执行导出权限校验。
-4. 权限通过后再校验导出名与坐标边界。
-5. 全部通过后发送不可变 `ExportGrantedPayload`。
+1. The payload sender must be a `ServerPlayer`.
+2. Menu identity, workstation existence and the eight-block distance check stay unchanged.
+3. Run the export permission check.
+4. Only after the permission passes, validate the export name and coordinate bounds.
+5. After everything passes, send the immutable `ExportGrantedPayload`.
 
-权限拒绝不改变工作台坐标，不启动客户端导出任务，也不创建事务目录。
+A permission rejection does not change the workstation coordinates, does not start a client export job and does not create a transaction directory.
 
-## 3. 固定 8px 物理边框
+## 3. Fixed 8px physical border
 
-### 3.1 单位
+### 3.1 Unit
 
-用户指定的 `8px` 表示物理屏幕像素，不是 Minecraft 逻辑 GUI 像素。运行时根据当前 GUI Scale 换算：
+The `8px` specified by the user means physical screen pixels, not Minecraft logical GUI pixels. At runtime it is converted according to the current GUI scale:
 
 ```text
 targetLogicalBorder = round(8 / guiScale)
 ```
 
-换算结果至少为 `1` 个逻辑像素。由于 Minecraft GUI 使用整数逻辑像素，GUI Scale 不能整除 8 时采用最接近的整数值，例如 Scale 3 使用 3 个逻辑像素，对应 9 个物理像素。
+The result is at least `1` logical pixel. Because the Minecraft GUI uses integer logical pixels, when the GUI scale does not divide 8 evenly the nearest integer is used; for example scale 3 uses 3 logical pixels, which is 9 physical pixels.
 
-### 3.2 素材安全约束
+### 3.2 Asset safety constraint
 
-每次九宫格绘制还需按源纹理与目标控件尺寸限制边框：
+Every nine-slice draw must also limit the border by the source texture and the destination control size:
 
 ```text
 safeBorder = min(
@@ -60,42 +60,42 @@ safeBorder = min(
 )
 ```
 
-始终为中心区保留至少 `1×1` 像素，禁止上下边框吃满 16px 高素材。
+At least a `1×1` pixel is always kept for the center region, so the top and bottom borders can never consume the whole 16px-tall asset.
 
-### 3.3 九宫格规则
+### 3.3 Nine-slice rules
 
-- 四角使用原始源像素。
-- 上下边只沿 X 轴拉伸。
-- 左右边只沿 Y 轴拉伸。
-- 中心安全区双轴拉伸。
-- 源 UV 不得越界，不平铺装饰像素，不整张缩放纹理。
-- 导出、取消和选区开关保持 16 个逻辑像素控件高度；边框视觉宽度由 GUI Scale 换算策略决定。
-- 选区开关底板固定不换，`GUI_059` 与 `GUI_060` 作为同尺寸状态芯原尺寸叠加。
+- The four corners use the original source pixels.
+- The top and bottom edges stretch only along the X axis.
+- The left and right edges stretch only along the Y axis.
+- The safe center stretches along both axes.
+- Source UVs must not go out of bounds, decorative pixels are not tiled, and the texture is never scaled as a whole.
+- Export, Cancel and the selection toggles keep a control height of 16 logical pixels; the visual border width is determined by the GUI scale conversion policy.
+- The selection toggle base plate is fixed and not swapped, and `GUI_059` and `GUI_060` are overlaid at their original size as same-size state cores.
 
-## 4. 测试
+## 4. Tests
 
-### 4.1 权限策略单元测试
+### 4.1 Permission policy unit tests
 
-覆盖：
+Cover:
 
-- 本地单人世界且权限等级 0：允许。
-- 专服权限等级 0/1：拒绝。
-- 专服权限等级 2/3/4：允许。
-- 拒绝原因键稳定。
-- 权限检查只接入导出 Payload，不影响坐标更新与脚下取点。
+- Local singleplayer world with permission level 0: allowed.
+- Dedicated server with permission level 0/1: rejected.
+- Dedicated server with permission level 2/3/4: allowed.
+- The rejection reason key is stable.
+- The permission check is wired only to the export payload and does not affect coordinate updates or feet-position picking.
 
-### 4.2 边框策略单元测试
+### 4.2 Border policy unit tests
 
-覆盖：
+Cover:
 
-- GUI Scale 1/2/3/4/6 的逻辑边框换算。
-- 16px 高素材始终保留至少 1px 中心。
-- 小目标控件不会被边框吃满。
-- Screen 不出现整图缩放或装饰区域平铺路径。
+- Logical border conversion at GUI scales 1/2/3/4/6.
+- A 16px-tall asset always keeps at least a 1px center.
+- A small destination control is never consumed by the border.
+- The Screen contains no whole-image scaling or decorative-region tiling path.
 
-### 4.3 回归验证
+### 4.3 Regression verification
 
-- 聚焦工作台测试。
-- `clean test build`。
-- `ServerClassIsolationTest` 与 `runServerSmoke`。
-- GUI Scale 2/3/4 实机检查导出、取消、选区开关和输入框边框。
+- Focused workstation tests.
+- `clean test build`.
+- `ServerClassIsolationTest` and `runServerSmoke`.
+- In-game checks of the Export, Cancel, selection toggles and input-box borders at GUI scales 2/3/4.

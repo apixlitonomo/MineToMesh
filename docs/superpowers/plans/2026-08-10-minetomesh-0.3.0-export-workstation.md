@@ -797,7 +797,7 @@ git commit -m "test: verify workstation server safety"
 
 - [ ] **Step 1: Write failing documentation assertions**
 
-Require README to contain `mcgltf-0.3.0.jar`, `客户端和服务端`, `区域导出工作台`, `关闭 GUI 会取消`, the recipe ingredients, and the retained `/mcgltf` command.
+Require README to contain `mcgltf-0.3.0.jar`, `both the client and the server`, `region export workstation`, `closing the GUI cancels`, the recipe ingredients, and the retained `/mcgltf` command.
 
 - [ ] **Step 2: Update README**
 

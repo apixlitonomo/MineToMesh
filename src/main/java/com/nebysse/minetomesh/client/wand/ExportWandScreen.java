@@ -222,14 +222,14 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
                 addRenderableWidget(field);
                 coordinateFields.add(field);
 
-                addRenderableWidget(skinnedButton(Component.literal("增加 1"),
+                addRenderableWidget(skinnedButton(Component.literal("Increase 1"),
                         Layout.stepUp(modelIndex),
                         pressed -> step(endpoint, axis, 1, false),
                         ExportWandTextures.GUI_041,
                         ExportWandTextures.GUI_042,
                         ExportWandTextures.GUI_045,
                         null, () -> false, false));
-                addRenderableWidget(skinnedButton(Component.literal("减少 1"),
+                addRenderableWidget(skinnedButton(Component.literal("Decrease 1"),
                         Layout.stepDown(modelIndex),
                         pressed -> step(endpoint, axis, -1, false),
                         ExportWandTextures.GUI_047,
@@ -239,7 +239,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
             }
         }
         overlayButton = addRenderableWidget(skinnedToggleButton(
-                Component.literal("手持预览"),
+                Component.literal("Preview"),
                 Layout.overlayButton(), pressed -> toggleOverlay(),
                 ExportWandTextures.GUI_043,
                 ExportWandTextures.GUI_044,
@@ -248,7 +248,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
                 ExportWandTextures.GUI_060,
                 () -> overlayVisible));
         lockedSelectionButton = addRenderableWidget(skinnedToggleButton(
-                Component.literal("锁定选区"),
+                Component.literal("Lock"),
                 Layout.lockedSelectionButton(), pressed -> toggleLockedSelection(),
                 ExportWandTextures.GUI_043,
                 ExportWandTextures.GUI_044,
@@ -257,7 +257,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
                 ExportWandTextures.GUI_060,
                 () -> selectionLocked));
         includePlayersButton = addRenderableWidget(skinnedToggleButton(
-                Component.literal("导出玩家"),
+                Component.literal("Players"),
                 Layout.includePlayersButton(), pressed -> toggleIncludePlayers(),
                 ExportWandTextures.GUI_043,
                 ExportWandTextures.GUI_044,
@@ -272,7 +272,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
         nameField = new EditBox(font,
                 screenX(nameSkin.x() + 5), screenY(nameSkin.y() + 2),
                 nameSkin.width() - 10, nameSkin.height() - 4,
-                Component.literal("导出名"));
+                Component.literal("Export Name"));
         nameField.setBordered(false);
         nameField.setTextColor(LIGHT);
         nameField.setTextColorUneditable(MID);
@@ -280,7 +280,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
         addRenderableWidget(nameField);
 
         exportButton = addRenderableWidget(skinnedButton(
-                Component.literal("导出"), Layout.exportButton(),
+                Component.literal("Export"), Layout.exportButton(),
                 pressed -> requestExport(),
                 ExportWandTextures.GUI_035,
                 ExportWandTextures.GUI_036,
@@ -289,7 +289,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
                 () -> controller.state() == ExportWandController.State.EXPORTING,
                 true));
         cancelButton = addRenderableWidget(skinnedButton(
-                Component.literal("取消"), Layout.cancelButton(),
+                Component.literal("Cancel"), Layout.cancelButton(),
                 pressed -> closeScreen(),
                 ExportWandTextures.GUI_032,
                 ExportWandTextures.GUI_033,
@@ -381,12 +381,12 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
         LockedSelectionService.ToggleResult result =
                 lockedSelectionService.toggle(currentLockedSelection());
         localStatusLine = switch (result) {
-            case LOCKED -> "选区已锁定";
-            case REPLACED -> "已替换锁定选区";
-            case UNLOCKED -> "选区已解锁";
-            case INCOMPLETE -> "需要完整选区";
-            case NO_PROFILE -> "无法识别当前世界";
-            case WRITE_FAILED -> "保存锁定选区失败";
+            case LOCKED -> "Selection locked";
+            case REPLACED -> "Locked selection replaced";
+            case UNLOCKED -> "Selection unlocked";
+            case INCOMPLETE -> "A complete selection is required";
+            case NO_PROFILE -> "Cannot identify the current world";
+            case WRITE_FAILED -> "Failed to save the locked selection";
         };
         statusLine = localStatusLine;
         updateLockedSelectionState();
@@ -445,7 +445,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
             commitExportName();
             send(new ExportWandRequestPayload(name.value()));
             controller.requested(name.value());
-            statusLine = "等待服务端授权";
+            statusLine = "Waiting for server authorization";
         } catch (IllegalArgumentException exception) {
             statusLine = exception.getMessage();
         }
@@ -553,15 +553,15 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
             return;
         }
         switch (controller.state()) {
-            case READY -> statusLine = "就绪";
-            case WAITING_FOR_GRANT -> statusLine = "等待服务端授权";
+            case READY -> statusLine = "Ready";
+            case WAITING_FOR_GRANT -> statusLine = "Waiting for server authorization";
             case EXPORTING -> {
                 ExportTelemetry.Snapshot snapshot = controller.telemetry().snapshot();
                 statusLine = snapshot.percent() + "% " + snapshot.stageKey();
             }
-            case COMPLETED -> statusLine = "导出完成";
-            case FAILED -> statusLine = "失败";
-            case CANCELLED -> statusLine = "已取消";
+            case COMPLETED -> statusLine = "Export complete";
+            case FAILED -> statusLine = "Failed";
+            case CANCELLED -> statusLine = "Cancelled";
         }
     }
 
@@ -709,7 +709,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
     }
 
     private void drawHeader(GuiGraphics graphics) {
-        graphics.drawString(font, Component.literal("导出魔杖"),
+        graphics.drawString(font, Component.literal("Export Wand"),
                 screenX(Layout.HEADER.x() + 22), screenY(Layout.HEADER.y() + 6), LIGHT, false);
         graphics.drawString(font, Component.literal(MineToMesh.DISPLAY_NAME + " " + MineToMesh.VERSION),
                 screenX(Layout.HEADER.right() - 112), screenY(Layout.HEADER.y() + 6), MID, false);
@@ -720,11 +720,11 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
         Rect secondTitle = Layout.endpointTitle(Endpoint.POS2);
         blitNatural(graphics, ExportWandTextures.GUI_068,
                 screenX(firstTitle.x()), screenY(firstTitle.y() - 1));
-        graphics.drawString(font, Component.literal("起点 FIRST"),
+        graphics.drawString(font, Component.literal("Start (POS1)"),
                 screenX(firstTitle.x() + 16), screenY(firstTitle.y() + 1), ORANGE, false);
         blitNatural(graphics, ExportWandTextures.GUI_069,
                 screenX(secondTitle.x()), screenY(secondTitle.y() - 1));
-        graphics.drawString(font, Component.literal("终点 SECOND"),
+        graphics.drawString(font, Component.literal("End (POS2)"),
                 screenX(secondTitle.x() + 16), screenY(secondTitle.y() + 1), BLUE, false);
 
         for (int index = 0; index < coordinateFields.size(); index++) {
@@ -735,9 +735,9 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
 
         blitNatural(graphics, ExportWandTextures.GUI_073,
                 screenX(Layout.RIGHT.x() + 8), screenY(Layout.RIGHT.y() + 5));
-        graphics.drawString(font, Component.literal("导出控制"),
+        graphics.drawString(font, Component.literal("Export Controls"),
                 screenX(Layout.RIGHT.x() + 34), screenY(Layout.RIGHT.y() + 10), BLUE, false);
-        graphics.drawString(font, Component.literal("导出名"),
+        graphics.drawString(font, Component.literal("Export Name"),
                 screenX(Layout.RIGHT.x() + 8), screenY(Layout.RIGHT.y() + 24), LIGHT, false);
         drawProgress(graphics);
         drawSummary(graphics);
@@ -765,7 +765,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
                     screenX(right + 8), screenY(top + 128), BLUE, false);
             graphics.drawString(font, Component.literal(snapshot.currentObjectId()),
                     screenX(right + 8), screenY(top + 140), MID, false);
-            graphics.drawString(font, Component.literal("队列 " + snapshot.queueDepth()),
+            graphics.drawString(font, Component.literal("Queue " + snapshot.queueDepth()),
                     screenX(right + 8), screenY(top + 152), MID, false);
         }
     }
@@ -790,7 +790,7 @@ public class ExportWandScreen extends AbstractContainerScreen<ExportWandMenu> {
                 Component.literal(directory.getFileName().toString()),
                 screenX(right + 30), screenY(top + 140), LIGHT, false));
         graphics.drawString(font, Component.literal(
-                        summary.nodeCount() + " 对象 · " + summary.primitiveCount() + " 基元"),
+                        summary.nodeCount() + " objects · " + summary.primitiveCount() + " primitives"),
                 screenX(right + 8), screenY(top + 153), LIGHT, false);
     }
 
