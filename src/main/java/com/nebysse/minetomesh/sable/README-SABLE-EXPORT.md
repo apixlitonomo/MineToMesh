@@ -15,10 +15,17 @@ world and says so in the log.
 Output: `<gameDir>/minetomesh-exports/<name>/`
 
 ```
-<name>.obj      geometry, one object per coordinate space (`world`, `sub01_<name>`, …)
-<name>.mtl      one material per render type, all pointing at the atlas image
-textures/*.png  the block atlas (and any entity sheet a renderer named), read back from the GPU
+<name>.gltf     scene, one node per coordinate space (`sable/world`, `sable/sub01_<name>`, …)
+<name>.bin      geometry buffers
+<name>.usda     the same scene as USD (quads preserved)
+report.json     counters and diagnostics (snapshotMode `sable_region_snapshot`)
+textures/*.png  one image per block sprite, plus any entity sheet a renderer named
+materials/      per-material sidecar files
 ```
+
+The output goes through the same chain as the Export Wand (`StreamingSceneSession`,
+`TextureRegistry`, `MaterialSidecarWriter`, `InternalGltfValidator`, `ReportWriter`), so a Sable
+export and a wand export of the same blocks use identical materials and texture names.
 
 ## Why a second export path
 
@@ -48,13 +55,19 @@ holding, so every mod model, `ModelData` and block-entity renderer resolves the 
 3. **Frames** — `SubLevelFrames` composes
    `frame = T(-origin) · pose · T(base)` in `double` and narrows **once** to `Matrix4f`.
 4. **Geometry** — blocks go through `BlockRenderDispatcher#getBlockModel` and the model's own
-   render types (`IBakedModelExtension#getRenderTypes/getQuads`), and block entities through their
-   `BlockEntityRenderer`. Both write into one `CapturingVertexConsumer` per
-   `(space, render type)`, so quads are grouped by `RenderType` all the way to `usemtl`.
+   render types (`IBakedModelExtension#getRenderTypes/getQuads`). Each quad is captured by
+   `RegionQuadCapture`: the real sprite is resolved from the quad's atlas UVs, extracted as its own
+   PNG, and the UVs are re-normalised into it; a tint colour is applied as vertex colour; a block's
+   quads are layered with `CoplanarQuadLayering` so exactly coincident faces do not z-fight. Block
+   entities go through their `BlockEntityRenderer` into `RegionBerBuffers`, which applies the
+   space's placement to positions and its normal matrix to normals. Both feed one
+   `PrimitiveAccumulator` per space, which is why a ship's blocks and block entities end up in one
+   node.
 5. **Flywheel gate** — `FlywheelGate` swaps `BackendManagerImpl.backend` for `OFF_BACKEND` for the
    length of the block-entity pass (nested-counted, no-op when Flywheel is absent).
-6. **Writing** — `RegionObjWriter` deduplicates vertices, converts to Blender axes, writes OBJ+MTL
-   and copies every referenced texture out of the GPU with `glGetTexImage`.
+6. **Writing** — `RegionSceneWriter` appends one `Chunks` node per space to a
+   `StreamingSceneSession`, writes the textures and material sidecars, validates the glTF and only
+   then publishes the transaction. A failed validation never replaces an existing export.
 
 ### Why the frame must be composed in `double`
 
@@ -95,9 +108,7 @@ region-block: id=<block id> state=<state> shape=<baked-quads|entity-or-empty> qu
 region-ber: id=<block id> ber=<renderer class> ok=<bool> reason=<…>                     <- when it fails
 region: skip block=<id> reason=<unsupported|no-model|exception>                        (≤20 lines)
 region: flywheel gate <ready|unavailable>
-region: texture saved=<file> size=<w>x<h> bytes=<n>
-region: wrote <path> (<v> vertices, <f> faces, <m> materials)
-region: baked blocks=<n> examined=<n> quads=<n> entities=0 ber=<n> materials=<n> skipped=<n> fluids=<n> spaces=<n> reasons={…}
+region: baked blocks=<n> examined=<n> quads=<n> entities=0 ber=<n> materials=<n> textures=<n> triangles=<n> skipped=<n> fluids=<n> spaces=<n> reasons={…}
 ```
 
 Refusals:
@@ -126,17 +137,23 @@ How to read them:
 * **Blocks and block entities only.** No entity export (armour stands, item frames, mobs, Create
   contraptions carried by entities). The `entities=0` field in the summary line is therefore a
   fact, not a failure.
-* **No per-block tint.** OBJ has no vertex colour this writer emits, so a tinted block (grass,
-  leaves, water) comes out with its texture untinted.
-* **Non-quad primitives are dropped.** `RenderType`s whose mode is not `QUADS` or `TRIANGLES`
-  (lines, strips) are reported as `skip render-type=… reason=primitive-mode` rather than mangled.
+* **No fluids.** Water and lava have no model quads; they are counted in `fluids=` and reported as
+  `SABLE_FLUIDS_SKIPPED` in `report.json`.
+* **No neighbour face culling.** Every quad of every block is kept, including faces pressed
+  against another block. The Export Wand culls them; this path does not yet, so dense hulls carry
+  more triangles than the same blocks exported with the wand.
+* **Tint is best effort inside sub-levels.** A block's colour provider is asked at the block's
+  plot-space position; if it cannot answer there the quad stays white (counted internally as a tint
+  failure, not an export failure).
+* **Grass side overlays stay in the space's node.** The wand merges them into one global overlay
+  object; here they are ordinary geometry of the space.
+* **Line and strip render types are dropped by the shared inspector.** Render types it maps to
+  nothing are discarded exactly as in the Export Wand pipeline.
 * **A `MODEL` block with no quads is skipped, not boxed.** There is no voxel-shape fallback here;
   it appears in the skip log as `no-model` so a missing part is never silent.
 * **Flywheel gate is one static field, best effort.** A pack whose Flywheel renamed the field makes
   the gate report `unavailable` and the export runs as if Flywheel were absent — which means the
   visual-drawn parts are missing again, and the log says so.
-* **Atlas UVs, not per-sprite crops.** Every material points at the same atlas image. A viewer that
-  cannot handle a 2k+ atlas will show blurry textures; cropping per sprite is left to the importer.
 * **`regionMaxBlocks` is a constant** (64×64×64 = 131,072 blocks). A dense 64-cube can produce a
   very large face count; select a hull, not a city block.
 * **The selection is client-side static state.** The blueprint tool clears it after a blueprint is

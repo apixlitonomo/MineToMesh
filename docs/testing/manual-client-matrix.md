@@ -98,6 +98,21 @@ The following items must be judged by the project owner in the real game and in 
 | CJK input method | Type Chinese text in the name box and commit | The Chinese name is saved and used for the output directory, and no hotkeys leak |
 | Restore after close | Press E, WASD and 1 to 9 after closing the GUI with Esc | Game hotkeys are restored immediately with no sticky state |
 
+## Sable region export (`/minetomesh sable <name>`)
+
+This path writes the same glTF/USDA output as the Export Wand. It needs Sable Photomancy (`sable_schematic_api`) and LDLib2 on the client; Flywheel is optional.
+
+| Scenario | Action | Expected result |
+|---|---|---|
+| Sable without the mods | Run `/minetomesh sable test` with Photomancy absent | The command refuses with a reason (`no-selection`) and writes nothing; the game keeps running |
+| Selection refusals | Run with no selection, one corner, a box above 64 × 64 × 64, and an unsafe name | Refused with `no-selection`, `one-corner`, `too-large` and `unsafe-name` respectively; no partial output directory is left |
+| Ship in a sub-level | Select a rotated ship and export | `<name>.gltf` has one node per coordinate space (`sable/world`, `sable/sub01_<name>`, ...), positioned correctly in Blender despite the rotation, with shading normals that follow the rotation; `<name>.usda` agrees |
+| Flywheel instances | Export a cannon, encased cogwheel and bearing | The parts appear, and Flywheel is restored to its previous backend afterwards |
+| Output files | Inspect the export directory | `.gltf`, `.bin`, `.usda`, `report.json`, `materials/` and one `textures/*.png` per sprite are present and the glTF validates; entities and fluids are not exported by design |
+| Tint | Export grass and leaves in the world and on a ship | World blocks carry their biome colour as vertex colour; on a ship a quad whose tint cannot be resolved stays white without failing the block |
+| Parity with the wand | Export the same small world selection with the wand and with `/minetomesh sable` | Same materials and texture names; the Sable export has more triangles because it does not cull faces between blocks |
+| Failure isolation | Export while a ship holds a block entity whose renderer throws | The export completes, the part is missing, and `report.json` carries `BLOCK_ENTITY_CAPTURE_FAILED` for it |
+
 ## 1.2.0 release candidate acceptance record
 
 - Automated: run `clean test build`, `ServerClassIsolationTest` and `runServerSmoke`.

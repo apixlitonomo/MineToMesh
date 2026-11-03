@@ -19,6 +19,13 @@ class ObjRemovalPolicyTest {
         assertFalse(scene.contains("StreamingObjSession"));
         assertFalse(scene.contains(".obj"));
         assertFalse(scene.contains(".mtl"));
+        assertFalse(Files.exists(root.resolve(
+                "src/main/java/com/nebysse/minetomesh/sable/RegionObjWriter.java")));
+        String region = Files.readString(root.resolve(
+                "src/main/java/com/nebysse/minetomesh/sable/RegionExport.java"),
+                StandardCharsets.UTF_8);
+        assertFalse(region.contains("RegionObjWriter"));
+        assertFalse(region.contains(".mtl"));
     }
 
     private static Path projectRoot() {

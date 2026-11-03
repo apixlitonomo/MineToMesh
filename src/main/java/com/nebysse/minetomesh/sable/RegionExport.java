@@ -1,28 +1,41 @@
 package com.nebysse.minetomesh.sable;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.nebysse.minetomesh.capture.CapturingVertexConsumer;
+import com.nebysse.minetomesh.MineToMesh;
+import com.nebysse.minetomesh.capture.CoplanarQuadLayering;
+import com.nebysse.minetomesh.capture.RenderTypeDescriptor;
+import com.nebysse.minetomesh.capture.RenderTypeInspector;
+import com.nebysse.minetomesh.job.DefaultExportPipeline;
 import com.nebysse.minetomesh.output.ExportName;
-import com.nebysse.minetomesh.output.OutputTransaction;
-import com.nebysse.minetomesh.scene.Vertex;
+import com.nebysse.minetomesh.report.ExportReport;
+import com.nebysse.minetomesh.scene.BatchCounters;
+import com.nebysse.minetomesh.scene.CapturedNode;
+import com.nebysse.minetomesh.scene.ChunkBatch;
+import com.nebysse.minetomesh.scene.Diagnostic;
+import com.nebysse.minetomesh.scene.GeometryAdjustmentStats;
+import com.nebysse.minetomesh.scene.MaterialKey;
+import com.nebysse.minetomesh.scene.PrimitiveAccumulator;
+import com.nebysse.minetomesh.scene.PrimitiveData;
+import com.nebysse.minetomesh.texture.AtlasSpriteResolver;
+import com.nebysse.minetomesh.texture.SpriteTextureExtractor;
+import com.nebysse.minetomesh.texture.TextureRegistry;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.LightTexture;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -35,7 +48,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.RenderShape;
@@ -43,11 +55,11 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.extensions.IBakedModelExtension;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
-import org.joml.Vector3f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,14 +88,16 @@ import org.slf4j.LoggerFactory;
  *       the visual engine's answer is turned off for the pass ({@link FlywheelGate}).</li>
  * </ul>
  *
- * <p>The geometry is written as Wavefront OBJ + MTL with the block atlas copied out of the GPU,
- * because that is what the downstream Blender pipeline consumes. UVs stay in atlas space and every
- * material points at the same atlas image, so a face is textured exactly where the game draws it
- * even when a model uses several sprites.
+ * <p>The capture is written through the same output chain as the Export Wand: glTF + BIN + USDA,
+ * one PNG per sprite, material sidecars and {@code report.json}. Every space (the ordinary world
+ * and each sub-level) becomes one {@code Chunks} node named {@code sable/world} or
+ * {@code sable/subNN_name}, holding both its block models and its block-entity geometry, so a ship
+ * arrives as one selectable object. Block quads get the same per-sprite UV resolution, tint and
+ * exact-coplanar layering as the ordinary export ({@link RegionQuadCapture}).
  *
  * <p>Known boundaries are listed in {@code README-SABLE-EXPORT.md} beside this package: no entity
- * (contraption/visual) export, no per-block tint, and a block whose model has no quads falls back to
- * the skip log rather than to a bounding box.
+ * (contraption/visual) export, no fluids, no neighbour face culling, and a block whose model has
+ * no quads falls back to the skip log rather than to a bounding box.
  */
 public final class RegionExport {
     private static final Logger LOGGER = LoggerFactory.getLogger(RegionExport.class);
@@ -100,9 +114,8 @@ public final class RegionExport {
     /** How far a space's geometry may sit from its own blocks before it is called drift. */
     private static final float SPACE_TOLERANCE = 0.5f;
 
-    /** The block atlas, used for every material whose render type names no texture of its own. */
-    private static final String BLOCK_ATLAS =
-            ResourceLocation.withDefaultNamespace("textures/atlas/blocks.png").toString();
+    /** Untinted: the colour multiplier a block quad gets when nothing colours it. */
+    private static final float[] NO_TINT = {1.0f, 1.0f, 1.0f};
 
     /** Every direction plus the null one, which is where a model keeps its unculled quads. */
     private static final List<Direction> DIRECTIONS = directions();
@@ -167,8 +180,8 @@ public final class RegionExport {
 
         try {
             Result result = export(minecraft, exportName, selection);
-            source.sendSuccess(() -> Component.literal("minetomesh sable: " + result.obj()
-                    + " (" + result.faces() + " faces, " + result.blocks() + " blocks, "
+            source.sendSuccess(() -> Component.literal("minetomesh sable: " + result.output()
+                    + " (" + result.faces() + " quads, " + result.blocks() + " blocks, "
                     + result.spaces() + " spaces)"), false);
             return 1;
         } catch (Throwable throwable) {
@@ -179,7 +192,7 @@ public final class RegionExport {
     }
 
     /** What one export produced, for the command's answer. */
-    public record Result(Path obj, int faces, int blocks, int spaces) {
+    public record Result(Path output, int faces, int blocks, int spaces) {
     }
 
     // ------------------------------------------------------------------ the export
@@ -187,6 +200,7 @@ public final class RegionExport {
     private static Result export(Minecraft minecraft, ExportName name, RegionSelection.Box selection)
             throws IOException {
         Level level = Objects.requireNonNull(minecraft.level, "level");
+        long startGameTime = level.getGameTime();
         AABB box = selection.aabb();
         int minX = (int) Math.floor(box.minX);
         int minY = (int) Math.floor(box.minY);
@@ -216,20 +230,30 @@ public final class RegionExport {
                         + " volume={} blocks={}", RegionSelection.SESSION_CLASS, selection.detail(),
                 minX, minY, minZ, maxX, maxY, maxZ, volume, tally.examined);
 
+        TextureRegistry textures = new TextureRegistry();
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        RegionQuadCapture quadCapture = new RegionQuadCapture(
+                new SpriteTextureExtractor(minecraft.getResourceManager()),
+                new AtlasSpriteResolver(atlasId -> minecraft.getModelManager().getAtlas(atlasId)),
+                textures);
+        Function<RenderTypeDescriptor, MaterialKey> materialResolver =
+                DefaultExportPipeline.resourceMaterialResolver(minecraft, textures, diagnostics);
+
         BlockRenderDispatcher blockRenderer = minecraft.getBlockRenderer();
         BlockEntityRenderDispatcher blockEntityRenderer = minecraft.getBlockEntityRenderDispatcher();
-        Collection collection = new Collection();
+        GeometryAdjustmentStats adjustments = GeometryAdjustmentStats.ZERO;
 
         for (Space space : spaces) {
             logSpace(space);
-            modelPass(space, blockRenderer, collection, tally);
+            adjustments = adjustments.plus(
+                    modelPass(space, blockRenderer, quadCapture, diagnostics, tally));
         }
         // The gate is taken around the whole block-entity pass rather than per renderer call: the
         // backend is one static field, and every renderer in the pass has to see the same answer.
         boolean gated = FlywheelGate.engage();
         try {
             for (Space space : spaces) {
-                berPass(space, blockEntityRenderer, collection, tally);
+                berPass(space, blockEntityRenderer, materialResolver, diagnostics, tally);
             }
         } finally {
             // Released before anything else: the visual engine's own answer has to be true again
@@ -237,29 +261,109 @@ public final class RegionExport {
             FlywheelGate.release(gated);
         }
 
-        List<RegionObjWriter.Face> faces = collection.finish(spaces);
-        if (faces.isEmpty()) {
+        List<CapturedNode> nodes = new ArrayList<>();
+        for (Space space : spaces) {
+            PrimitiveAccumulator.SealResult sealed = space.accumulator.seal();
+            diagnostics.addAll(sealed.diagnostics());
+            space.sealed = sealed.primitives();
+            if (!sealed.primitives().isEmpty()) {
+                nodes.add(new CapturedNode(
+                        RegionScene.nodeName(space.index, space.name),
+                        CapturedNode.Kind.CHUNK,
+                        sealed.primitives(),
+                        RegionScene.nodeExtras(space.index, space.name)));
+            }
+        }
+        if (nodes.isEmpty()) {
             throw new IOException("nothing to export: blocks=" + tally.examined
                     + ", block entities=" + tally.blockEntities + ", selection=" + minX + ","
                     + minY + "," + minZ + ".." + maxX + "," + maxY + "," + maxZ);
         }
-        checkSpaces(spaces, faces);
+        checkSpaces(spaces);
 
-        Path exportRoot = minecraft.gameDirectory.toPath().resolve("minetomesh-exports");
-        Path obj;
-        try (OutputTransaction transaction = OutputTransaction.begin(exportRoot, name)) {
-            Path directory = transaction.temporaryDirectory();
-            obj = RegionObjWriter.write(directory, name.value(), faces, collection.materials());
-            Path published = transaction.publish();
-            obj = published.resolve(directory.relativize(obj));
+        if (tally.fluids > 0) {
+            diagnostics.add(diagnostic(Diagnostic.Severity.INFO, "SABLE_FLUIDS_SKIPPED",
+                    "sable", "", "", tally.fluids + " fluid block(s) in the selection were not"
+                            + " exported; the Sable region export carries no fluid geometry"));
+        }
+        if (tally.skipped > 0) {
+            diagnostics.add(diagnostic(Diagnostic.Severity.WARNING, "SABLE_BLOCKS_SKIPPED",
+                    "sable", "", "", tally.skipped + " block(s) contributed no geometry: "
+                            + tally.reasons));
         }
 
+        Set<MaterialKey> materials = new LinkedHashSet<>();
+        long triangles = 0;
+        for (CapturedNode node : nodes) {
+            node.primitives().forEach(primitive -> materials.add(primitive.material()));
+            triangles += RegionScene.triangleCount(node.primitives());
+        }
+        BatchCounters counters = new BatchCounters(
+                tally.examined, tally.produced, 0, tally.berDrawn, 0,
+                materials.size(), textures.size(), triangles, 0);
+        ChunkBatch batch = new ChunkBatch(nodes, diagnostics, counters, adjustments);
+
+        long warnings = DefaultExportPipeline.warningCount(diagnostics);
+        int[] min = {minX, minY, minZ};
+        int[] max = {maxX, maxY, maxZ};
+        ExportReport report = new ExportReport(
+                warnings == 0 ? "completed" : "completed_with_warnings",
+                "sable_region_snapshot",
+                level.dimension().location().toString(),
+                min, max, min, volume,
+                startGameTime, level.getGameTime(),
+                counters, adjustments, List.of(), diagnostics, Map.of());
+
+        Path exportRoot = minecraft.gameDirectory.toPath().resolve("minetomesh-exports");
+        Path published = RegionSceneWriter.write(
+                exportRoot, name, rootExtras(minecraft, level, min, max, spaces),
+                batch, textures, report);
+
         LOGGER.info("region: baked blocks={} examined={} quads={} entities=0 ber={} materials={}"
-                        + " skipped={} fluids={} spaces={} reasons={}",
-                tally.produced, tally.examined, faces.size(), tally.berDrawn,
-                collection.materials().size(), tally.skipped, tally.fluids, spaces.size(),
+                        + " textures={} triangles={} skipped={} fluids={} spaces={} reasons={}",
+                tally.produced, tally.examined, tally.quads, tally.berDrawn, materials.size(),
+                textures.size(), triangles, tally.skipped, tally.fluids, spaces.size(),
                 tally.reasons);
-        return new Result(obj, faces.size(), tally.produced, spaces.size());
+        return new Result(published, tally.quads, tally.produced, spaces.size());
+    }
+
+    private static Map<String, Object> rootExtras(
+            Minecraft minecraft, Level level, int[] min, int[] max, List<Space> spaces) {
+        Map<String, Object> extras = new LinkedHashMap<>();
+        extras.put("minecraftVersion", "1.21.1");
+        extras.put("neoForgeVersion", loadedModVersion("neoforge"));
+        extras.put("exporterVersion", MineToMesh.VERSION);
+        extras.put("exportSource", "sable_region");
+        extras.put("dimension", level.dimension().location().toString());
+        extras.put("selectionMin", List.of(min[0], min[1], min[2]));
+        extras.put("selectionMax", List.of(max[0], max[1], max[2]));
+        extras.put("origin", List.of(min[0], min[1], min[2]));
+        extras.put("coordinateSpaces", spaces.stream()
+                .map(space -> RegionScene.objectName(space.index, space.name)).toList());
+        extras.put("activeResourcePacks", List.copyOf(
+                minecraft.getResourcePackRepository().getSelectedIds()));
+        extras.put("loadedMods", ModList.get().getMods().stream()
+                .map(info -> info.getModId() + "@" + info.getVersion())
+                .sorted()
+                .toList());
+        extras.put("snapshotMode", "sable_region_snapshot");
+        extras.put("formats", List.of("gltf", "usda"));
+        extras.put("sourceTopologyPreservedInUsda", true);
+        return extras;
+    }
+
+    private static String loadedModVersion(String modId) {
+        return ModList.get().getMods().stream()
+                .filter(info -> info.getModId().equals(modId))
+                .map(info -> info.getVersion().toString())
+                .findFirst()
+                .orElse("unknown");
+    }
+
+    private static Diagnostic diagnostic(Diagnostic.Severity severity, String code, String objectId,
+                                         String rendererClass, String exceptionType, String message) {
+        return new Diagnostic(severity, code, objectId, Optional.empty(), rendererClass,
+                exceptionType, message);
     }
 
     /** One coordinate space the export draws from: the world, or one sub-level's storage. */
@@ -267,7 +371,7 @@ public final class RegionExport {
         final String label;
         /** The structure's own name, for the object line; {@code world} for the ordinary world. */
         final String name;
-        /** Object index in the .obj; 0 is the world, sub-levels follow. */
+        /** Space index; 0 is the world, sub-levels follow. */
         final int index;
         /** Base-relative coordinates of this space to export coordinates. */
         final SubLevelFrames.Frame frame;
@@ -281,6 +385,10 @@ public final class RegionExport {
         final List<Pending> pending = new ArrayList<>();
         /** Whether any renderer in this space wrote a vertex. */
         int berVertices;
+        /** Collects the block and block-entity geometry of this space, material by material. */
+        final PrimitiveAccumulator accumulator;
+        /** The sealed geometry of this space, set once both passes are done. */
+        List<PrimitiveData> sealed = List.of();
 
         Space(String label, String name, int index, SubLevelFrames.Frame frame, BlockPos base,
               Level level) {
@@ -290,6 +398,7 @@ public final class RegionExport {
             this.frame = frame == null ? SubLevelFrames.world(base) : frame;
             this.base = base;
             this.level = level;
+            this.accumulator = new PrimitiveAccumulator(RegionScene.nodeName(index, this.name));
         }
 
         BlockPos relative(BlockPos pos) {
@@ -299,8 +408,7 @@ public final class RegionExport {
         String object() {
             // The object name is what a Blender outliner shows, so it carries the structure's own
             // name once rather than the log label (which repeats the index as `sub1:name`).
-            return index == 0 ? "world"
-                    : "sub" + String.format(Locale.ROOT, "%02d", index) + "_" + sanitize(name);
+            return RegionScene.objectName(index, name);
         }
     }
 
@@ -464,11 +572,21 @@ public final class RegionExport {
     // ------------------------------------------------------------------ geometry
 
     /**
-     * The model pass for one space: every block's own baked model, drawn through the same vertex
-     * formats the game uses, with one verdict per block.
+     * The model pass for one space: every block's own baked model, resolved per quad to its real
+     * sprite, with one verdict per block. A block's quads are layered as a group so exactly
+     * coincident faces (a powered rail's two surfaces, a grass block's base and overlay) are kept
+     * and offset instead of flickering.
+     *
+     * @return the geometry adjustments the layering made
      */
-    private static void modelPass(Space space, BlockRenderDispatcher dispatcher,
-                                  Collection collection, Tally tally) {
+    private static GeometryAdjustmentStats modelPass(
+            Space space,
+            BlockRenderDispatcher dispatcher,
+            RegionQuadCapture capture,
+            List<Diagnostic> diagnostics,
+            Tally tally) {
+        GeometryAdjustmentStats adjustments = GeometryAdjustmentStats.ZERO;
+        Set<String> inspectedRenderTypes = new HashSet<>();
         RandomSource random = RandomSource.create();
         for (Map.Entry<BlockPos, BlockState> entry : space.states.entrySet()) {
             BlockPos pos = entry.getKey();
@@ -525,24 +643,42 @@ public final class RegionExport {
                 layers.add(single == null ? RenderType.solid() : single);
             }
 
+            // Models such as flowers and bamboo are drawn displaced by a position-derived offset.
+            Vec3 offset = Vec3.ZERO;
+            try {
+                offset = state.getOffset(space.level, pos);
+            } catch (Throwable ignored) {
+                // an offset that cannot be read leaves the block where its own position puts it
+            }
             // `frame . T(block - base)`: the frame first, so the pose a quad goes through is the
             // product and never the float-composed translation on its own.
             PoseStack pose = new PoseStack();
             pose.mulPose(space.frame.render());
             BlockPos relative = space.relative(pos);
-            pose.translate(relative.getX(), relative.getY(), relative.getZ());
+            pose.translate(relative.getX() + offset.x, relative.getY() + offset.y,
+                    relative.getZ() + offset.z);
             PoseStack.Pose last = pose.last();
 
-            int produced = 0;
+            List<RegionQuadCapture.Captured> pending = new ArrayList<>();
             boolean failed = false;
+            long seed = state.getSeed(pos);
             for (RenderType layer : layers) {
-                VertexConsumer consumer = collection.consumer(space.index, layer);
+                RenderTypeInspector.Inspection inspection = RenderTypeInspector.inspect(layer);
+                RenderTypeDescriptor descriptor = inspection.descriptor();
+                if (inspectedRenderTypes.add(descriptor.name())) {
+                    diagnostics.addAll(inspection.diagnostics());
+                }
+                if (descriptor.discard()) {
+                    continue;
+                }
                 for (Direction direction : DIRECTIONS) {
+                    RandomSource quadRandom = RandomSource.create();
+                    quadRandom.setSeed(seed);
                     List<BakedQuad> quads;
                     try {
                         quads = extension == null
-                                ? model.getQuads(state, direction, random)
-                                : extension.getQuads(state, direction, random, modelData, layer);
+                                ? model.getQuads(state, direction, quadRandom)
+                                : extension.getQuads(state, direction, quadRandom, modelData, layer);
                     } catch (Throwable throwable) {
                         continue;
                     }
@@ -554,36 +690,82 @@ public final class RegionExport {
                             continue;
                         }
                         try {
-                            // Full brightness: the export carries no lighting, and a renderer that
-                            // multiplies by the packed light comes out black at zero.
-                            consumer.putBulkData(last, quad, 1.0f, 1.0f, 1.0f, 1.0f,
-                                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
-                            produced++;
+                            float[] tint = tint(space, state, pos, quad, tally);
+                            pending.add(capture.capture(last, quad, tint[0], tint[1], tint[2],
+                                    descriptor, block, diagnostics));
                         } catch (Throwable throwable) {
                             failed = true;
                         }
                     }
                 }
             }
-            if (produced > 0) {
+
+            if (!pending.isEmpty()) {
+                CoplanarQuadLayering.Result layered = CoplanarQuadLayering.apply(
+                        pending.stream().map(RegionQuadCapture.Captured::vertices).toList());
+                for (int index = 0; index < pending.size(); index++) {
+                    RegionQuadCapture.Captured quad = pending.get(index);
+                    space.accumulator.append(
+                            quad.material(), quad.mode(), layered.quads().get(index));
+                }
+                CoplanarQuadLayering.Statistics layering = layered.statistics();
+                adjustments = adjustments.plus(GeometryAdjustmentStats.forBlock(
+                        block, layering.coplanarGroups(), layering.offsetFaces(),
+                        layering.maxLayers()));
+                if (layering.invalidNormals() > 0) {
+                    diagnostics.add(diagnostic(Diagnostic.Severity.WARNING,
+                            "COPLANAR_FACE_NORMAL_INVALID", block, "", "",
+                            "Could not offset " + layering.invalidNormals()
+                                    + " coincident face layer(s) because their normals were"
+                                    + " degenerate"));
+                }
+                tally.quads += pending.size();
                 tally.produced++;
             } else {
                 space.pending.add(new Pending(pos, block, failed ? "exception" : "no-model"));
             }
             if (tally.wantBlockLine() || tally.firstBlockKind(block)) {
                 LOGGER.info("region-block: id={} state={} shape={} quads={} be={}",
-                        block, state.toString(), produced > 0 ? "baked-quads"
-                                : "entity-or-empty", produced,
+                        block, state.toString(), !pending.isEmpty() ? "baked-quads"
+                                : "entity-or-empty", pending.size(),
                         space.blockEntities.containsKey(pos));
             }
         }
+        return adjustments;
+    }
+
+    /**
+     * The block-colour multiplier of one quad, as {@code r, g, b} in {@code 0..1}.
+     *
+     * <p>A sub-level's blocks are asked in their plot coordinates, which have no biome of their
+     * own; a colour provider that cannot answer there leaves the quad white rather than failing
+     * the block.
+     */
+    private static float[] tint(Space space, BlockState state, BlockPos pos, BakedQuad quad,
+                                Tally tally) {
+        if (!quad.isTinted()) {
+            return NO_TINT;
+        }
+        try {
+            int tint = Minecraft.getInstance().getBlockColors()
+                    .getColor(state, space.level, pos, quad.getTintIndex());
+            if (tint != -1) {
+                return new float[] {
+                    (tint >> 16 & 0xFF) / 255.0f,
+                    (tint >> 8 & 0xFF) / 255.0f,
+                    (tint & 0xFF) / 255.0f};
+            }
+        } catch (Throwable throwable) {
+            tally.tintFailures++;
+        }
+        return NO_TINT;
     }
 
     /**
      * The block-entity pass for one space.
      *
      * <p>The renderer is handed an empty pose: it writes relative to its own block and follows
-     * whatever pose it is given, and the consumer adds {@code frame . T(block - base)}. Giving it
+     * whatever pose it is given, and the buffers add {@code frame . T(block - base)}. Giving it
      * both would count the placement twice - the mistake that made sub-level geometry span four
      * units instead of twenty-one.
      *
@@ -594,8 +776,12 @@ public final class RegionExport {
      * drawn, so every one of them would be culled - and so would half of a large world selection.
      * The dispatcher is still used for the renderer lookup, which is a plain type map.
      */
-    private static void berPass(Space space, BlockEntityRenderDispatcher dispatcher,
-                                Collection collection, Tally tally) {
+    private static void berPass(
+            Space space,
+            BlockEntityRenderDispatcher dispatcher,
+            Function<RenderTypeDescriptor, MaterialKey> materialResolver,
+            List<Diagnostic> diagnostics,
+            Tally tally) {
         if (space.blockEntities.isEmpty()) {
             resolvePending(space, false, tally);
             return;
@@ -604,24 +790,25 @@ public final class RegionExport {
         PoseStack pose = new PoseStack();
         for (Map.Entry<BlockPos, BlockEntity> entry : space.blockEntities.entrySet()) {
             BlockEntity blockEntity = entry.getValue();
+            String berId = blockId(blockEntity.getBlockState());
             BlockEntityRenderer<BlockEntity> renderer = null;
             try {
                 renderer = dispatcher.getRenderer(blockEntity);
             } catch (Throwable throwable) {
                 LOGGER.info("region-ber: id={} reason=lookup-failed ({})",
-                        blockId(blockEntity.getBlockState()), throwable.getClass().getSimpleName());
+                        berId, throwable.getClass().getSimpleName());
             }
             if (renderer == null) {
                 if (tally.wantBerLine()) {
                     LOGGER.info("region-ber: id={} ber=- ok=false quads=0 reason=no-renderer",
-                            blockId(blockEntity.getBlockState()));
+                            berId);
                 }
                 continue;
             }
             BlockPos relative = space.relative(entry.getKey());
             Matrix4f placement = new Matrix4f(space.frame.render())
                     .translate(relative.getX(), relative.getY(), relative.getZ());
-            BerSource source = new BerSource(collection, space.index, placement);
+            RegionBerBuffers source = new RegionBerBuffers(placement);
             try {
                 pose.pushPose();
                 // Full brightness rather than 0, and NO_OVERLAY rather than 0: zero is a real
@@ -629,13 +816,14 @@ public final class RegionExport {
                 renderer.render(blockEntity, partialTick, pose, source,
                         LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
                 pose.popPose();
-                space.berVertices += source.vertices;
-                if (source.vertices > 0) {
+                int written = source.vertices();
+                space.berVertices += written;
+                if (written > 0) {
+                    source.finishInto(space.accumulator, materialResolver, diagnostics);
                     tally.berDrawn++;
                 } else if (tally.wantBerLine()) {
                     LOGGER.info("region-ber: id={} ber={} ok=false quads=0 reason=drew-nothing",
-                            blockId(blockEntity.getBlockState()),
-                            renderer.getClass().getSimpleName());
+                            berId, renderer.getClass().getSimpleName());
                 }
             } catch (Throwable throwable) {
                 try {
@@ -643,10 +831,14 @@ public final class RegionExport {
                 } catch (Throwable ignored) {
                     // the stack is rebuilt per block anyway
                 }
+                diagnostics.add(diagnostic(Diagnostic.Severity.WARNING,
+                        "BLOCK_ENTITY_CAPTURE_FAILED", berId, renderer.getClass().getName(),
+                        throwable.getClass().getName(),
+                        throwable.getMessage() == null
+                                ? "Block entity capture failed" : throwable.getMessage()));
                 if (tally.wantBerLine()) {
                     LOGGER.info("region-ber: id={} ber={} ok=false reason={}: {}",
-                            blockId(blockEntity.getBlockState()),
-                            renderer.getClass().getSimpleName(),
+                            berId, renderer.getClass().getSimpleName(),
                             throwable.getClass().getSimpleName(), throwable.getMessage());
                 }
             }
@@ -680,11 +872,11 @@ public final class RegionExport {
      * centres. A space whose frame translation is a few blocks out reads that error here even
      * though its own parts agree with each other - which is the multi-structure fault exactly.
      */
-    private static void checkSpaces(List<Space> spaces, List<RegionObjWriter.Face> faces) {
+    private static void checkSpaces(List<Space> spaces) {
         for (Space space : spaces) {
             try {
                 float[] blockBox = space.frame.blockBounds(space.states.keySet(), space.base);
-                float[] vertexBox = vertexBounds(faces, space.object());
+                float[] vertexBox = RegionScene.vertexBounds(space.sealed);
                 if (blockBox == null && vertexBox == null) {
                     continue;
                 }
@@ -719,279 +911,6 @@ public final class RegionExport {
                 format(space.frame.render().m32()));
     }
 
-    // ------------------------------------------------------------------ materials
-
-    /**
-     * The quads of every {@code (space, render type)} bucket, and the materials they belong to.
-     *
-     * <p>One bucket per render type is what puts a face in front of the image the game draws it
-     * with, and what lets the writer group {@code usemtl} the way the renderer groups its state.
-     */
-    private static final class Collection {
-        private final Map<Bucket, CapturingVertexConsumer> consumers = new LinkedHashMap<>();
-        private final Map<String, RegionObjWriter.Material> materials = new LinkedHashMap<>();
-
-        VertexConsumer consumer(int space, RenderType renderType) {
-            return consumers.computeIfAbsent(new Bucket(space, renderType),
-                    key -> new CapturingVertexConsumer());
-        }
-
-        Map<String, RegionObjWriter.Material> materials() {
-            return materials;
-        }
-
-        List<RegionObjWriter.Face> finish(List<Space> spaces) {
-            Map<Integer, String> objects = new LinkedHashMap<>();
-            for (Space space : spaces) {
-                objects.put(space.index, space.object());
-            }
-            List<RegionObjWriter.Face> faces = new ArrayList<>();
-            int discarded = 0;
-            for (Map.Entry<Bucket, CapturingVertexConsumer> entry : consumers.entrySet()) {
-                Bucket bucket = entry.getKey();
-                List<Vertex> vertices;
-                try {
-                    vertices = entry.getValue().finish();
-                } catch (Throwable throwable) {
-                    continue;
-                }
-                int stride = stride(bucket.renderType());
-                if (stride == 0) {
-                    discarded += vertices.size();
-                    LOGGER.info("region: skip render-type={} reason=primitive-mode stage={}",
-                            renderTypeName(bucket.renderType()), bucket.renderType().mode());
-                    continue;
-                }
-                if (vertices.isEmpty()) {
-                    continue;
-                }
-                RegionObjWriter.Material material = material(bucket.renderType());
-                String object = objects.getOrDefault(bucket.space(), "world");
-                int whole = vertices.size() - vertices.size() % stride;
-                for (int index = 0; index < whole; index += stride) {
-                    float[] positions = new float[stride * 3];
-                    float[] uvs = new float[stride * 2];
-                    for (int vertex = 0; vertex < stride; vertex++) {
-                        Vertex source = vertices.get(index + vertex);
-                        positions[vertex * 3] = source.position().x();
-                        positions[vertex * 3 + 1] = source.position().y();
-                        positions[vertex * 3 + 2] = source.position().z();
-                        uvs[vertex * 2] = source.uv().x();
-                        uvs[vertex * 2 + 1] = source.uv().y();
-                    }
-                    faces.add(new RegionObjWriter.Face(object, material.name(), positions, uvs,
-                            stride));
-                }
-                if (vertices.size() % stride != 0) {
-                    discarded += vertices.size() % stride;
-                }
-            }
-            if (discarded > 0) {
-                LOGGER.info("region: vertices discarded={} reason=primitive-mode-or-partial",
-                        discarded);
-            }
-            return faces;
-        }
-
-        private RegionObjWriter.Material material(RenderType renderType) {
-            String name = renderTypeName(renderType);
-            String texture = renderTypeTexture(renderType).orElse(BLOCK_ATLAS);
-            String key = "M_" + sanitize(name) + "_" + sanitize(texture);
-            return materials.computeIfAbsent(key,
-                    value -> new RegionObjWriter.Material(value, texture, alphaMode(name)));
-        }
-
-        /** {@code 4} for a quad, {@code 3} for a triangle, {@code 0} for a mode OBJ cannot carry. */
-        private static int stride(RenderType renderType) {
-            try {
-                return switch (renderType.mode()) {
-                    case QUADS -> 4;
-                    case TRIANGLES -> 3;
-                    default -> 0;
-                };
-            } catch (Throwable throwable) {
-                return 4;
-            }
-        }
-    }
-
-    private record Bucket(int space, RenderType renderType) {
-    }
-
-    /**
-     * A {@link MultiBufferSource} for one block entity: every render type gets a consumer that
-     * applies {@code frame . T(block - base)} and counts what the renderer wrote.
-     */
-    private static final class BerSource implements MultiBufferSource {
-        private final Collection collection;
-        private final int space;
-        private final Matrix4f placement;
-        int vertices;
-
-        BerSource(Collection collection, int space, Matrix4f placement) {
-            this.collection = collection;
-            this.space = space;
-            this.placement = placement;
-        }
-
-        @Override
-        public VertexConsumer getBuffer(RenderType renderType) {
-            return new PosedCapture(collection.consumer(space, renderType), placement, this);
-        }
-    }
-
-    /**
-     * Applies the current pose and then the space's placement to every vertex.
-     *
-     * <p>{@link CapturingVertexConsumer} deliberately ignores the pose it is handed, because on the
-     * block path the pose is already baked into the numbers. A block-entity renderer is the other
-     * case: it does not apply the stack itself and expects the consumer to, so this wrapper is what
-     * makes a barrel's pitch or a bearing's angle visible in the export at all.
-     */
-    private static final class PosedCapture implements VertexConsumer {
-        private final VertexConsumer delegate;
-        private final Matrix4f placement;
-        private final BerSource counter;
-
-        PosedCapture(VertexConsumer delegate, Matrix4f placement, BerSource counter) {
-            this.delegate = delegate;
-            this.placement = placement;
-            this.counter = counter;
-        }
-
-        private void place(Matrix4f pose, float x, float y, float z) {
-            Vector3f point = new Vector3f(x, y, z);
-            if (pose != null) {
-                pose.transformPosition(point);
-            }
-            placement.transformPosition(point);
-            counter.vertices++;
-            delegate.addVertex(point.x, point.y, point.z);
-        }
-
-        @Override
-        public VertexConsumer addVertex(float x, float y, float z) {
-            place(null, x, y, z);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer addVertex(Matrix4f pose, float x, float y, float z) {
-            place(pose, x, y, z);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer addVertex(PoseStack.Pose pose, float x, float y, float z) {
-            place(pose == null ? null : pose.pose(), x, y, z);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setColor(int red, int green, int blue, int alpha) {
-            delegate.setColor(red, green, blue, alpha);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv(float u, float v) {
-            delegate.setUv(u, v);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv1(int u, int v) {
-            delegate.setUv1(u, v);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setUv2(int u, int v) {
-            delegate.setUv2(u, v);
-            return this;
-        }
-
-        @Override
-        public VertexConsumer setNormal(float x, float y, float z) {
-            delegate.setNormal(x, y, z);
-            return this;
-        }
-    }
-
-    // ------------------------------------------------------------------ render type introspection
-
-    /**
-     * A render type's name.
-     *
-     * <p>Read by reflection because {@code RenderStateShard#name} is {@code protected} in the
-     * shipped classes and only the development environment widens it. The fallback is the render
-     * type's own {@code toString()}, which every composite type builds from the same name.
-     */
-    private static String renderTypeName(RenderType renderType) {
-        try {
-            Field field = RenderStateShard.class.getDeclaredField("name");
-            field.setAccessible(true);
-            Object value = field.get(renderType);
-            if (value instanceof String name && !name.isBlank()) {
-                return name;
-            }
-        } catch (Throwable ignored) {
-            // fall through
-        }
-        try {
-            return String.valueOf(renderType);
-        } catch (Throwable ignored) {
-            return "render_type";
-        }
-    }
-
-    /**
-     * The texture a render type draws with, or empty when it has none of its own.
-     *
-     * <p>The chunk sheets ({@code solid}, {@code cutout}, {@code translucent}) name no texture -
-     * the chunk renderer binds the block atlas itself - so an empty answer means "the block atlas"
-     * to every caller here. Entity sheets do name one, and that is the image their faces belong to.
-     */
-    private static Optional<String> renderTypeTexture(RenderType renderType) {
-        try {
-            Method state = renderType.getClass().getDeclaredMethod("state");
-            state.setAccessible(true);
-            Object composite = state.invoke(renderType);
-            if (composite == null) {
-                return Optional.empty();
-            }
-            Field textureState = composite.getClass().getDeclaredField("textureState");
-            textureState.setAccessible(true);
-            Object shard = textureState.get(composite);
-            if (shard == null) {
-                return Optional.empty();
-            }
-            Method cutoutTexture = shard.getClass().getDeclaredMethod("cutoutTexture");
-            cutoutTexture.setAccessible(true);
-            Object value = cutoutTexture.invoke(shard);
-            if (value instanceof Optional<?> optional
-                    && optional.orElse(null) instanceof ResourceLocation location) {
-                return Optional.of(location.toString());
-            }
-        } catch (Throwable ignored) {
-            // a render type with no composite state draws with the atlas
-        }
-        return Optional.empty();
-    }
-
-    /** {@code opaque}, {@code mask} or {@code blend}, from the render type's own name. */
-    private static String alphaMode(String name) {
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.contains("translucent") || lower.contains("glint") || lower.contains("additive")
-                || lower.contains("lightning")) {
-            return "blend";
-        }
-        if (lower.contains("cutout")) {
-            return "mask";
-        }
-        return "opaque";
-    }
-
     // ------------------------------------------------------------------ small helpers
 
     private static List<Direction> directions() {
@@ -1014,13 +933,6 @@ public final class RegionExport {
         } catch (Throwable throwable) {
             return "?";
         }
-    }
-
-    private static String sanitize(String value) {
-        if (value == null || value.isBlank()) {
-            return "unknown";
-        }
-        return value.replaceAll("[^A-Za-z0-9_.-]", "_");
     }
 
     private static String format(float value) {
@@ -1047,36 +959,6 @@ public final class RegionExport {
         return (box[axis] + box[axis + 3]) * 0.5f;
     }
 
-    /** The bounds of every vertex of the faces belonging to one object, as {@code min, max}. */
-    private static float[] vertexBounds(List<RegionObjWriter.Face> faces, String object) {
-        float[] out = null;
-        for (RegionObjWriter.Face face : faces) {
-            if (!face.object().equals(object)) {
-                continue;
-            }
-            float[] positions = face.position();
-            for (int index = 0; index + 2 < positions.length; index += 3) {
-                float x = positions[index];
-                float y = positions[index + 1];
-                float z = positions[index + 2];
-                if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z)) {
-                    continue;
-                }
-                if (out == null) {
-                    out = new float[] {x, y, z, x, y, z};
-                } else {
-                    out[0] = Math.min(out[0], x);
-                    out[1] = Math.min(out[1], y);
-                    out[2] = Math.min(out[2], z);
-                    out[3] = Math.max(out[3], x);
-                    out[4] = Math.max(out[4], y);
-                    out[5] = Math.max(out[5], z);
-                }
-            }
-        }
-        return out;
-    }
-
     /** Counts one export's blocks, and the reasons any of them contributed nothing. */
     private static final class Tally {
         int examined;
@@ -1085,6 +967,8 @@ public final class RegionExport {
         int fluids;
         int blockEntities;
         int berDrawn;
+        int quads;
+        int tintFailures;
         final Map<String, Integer> reasons = new LinkedHashMap<>();
         private int lines;
         private int blockLines;

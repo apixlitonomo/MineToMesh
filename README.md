@@ -80,7 +80,7 @@ Setting points, clearing and opening the menu only play sound feedback. Setting 
 
 ## Sable compatibility (`/minetomesh sable`)
 
-MineToMesh can export a region from a Sable world, including structures that Sable keeps inside sub-levels (for example ships and contraptions), as an OBJ file with an MTL material file. It reuses the selection of the Sable blueprint tool instead of the Export Wand, and every integration is optional and reached by reflection, so MineToMesh still loads normally without Sable.
+MineToMesh can export a region from a Sable world, including structures that Sable keeps inside sub-levels (for example ships and contraptions), as glTF 2.0 and USDA, the same formats and the same output layout as the Export Wand. It reuses the selection of the Sable blueprint tool instead of the Export Wand, and every integration is optional and reached by reflection, so MineToMesh still loads normally without Sable.
 
 **Setup**
 
@@ -99,18 +99,21 @@ MineToMesh can export a region from a Sable world, including structures that Sab
 3. Find the result in `.minecraft/minetomesh-exports/myship/`:
 
    ```text
-   myship.obj      geometry, one object per coordinate space (`world`, `sub01_myship`, ...)
-   myship.mtl      one material per render type, all pointing at the atlas image
-   textures/*.png  the block atlas (and any entity sheet a renderer named), read back from the GPU
+   myship.gltf     scene, one node per coordinate space (`sable/world`, `sable/sub01_myship`, ...)
+   myship.bin      geometry buffers for the glTF
+   myship.usda     the same scene as USD, with quads preserved
+   report.json     counters and diagnostics
+   textures/*.png  one image per block sprite (and any entity sheet a renderer named)
+   materials/      per-material sidecar files
    ```
 
 Notes:
 
 - The selection is the two corners set by left-clicking in the tool's library mode; Shift + left click clears it. It is client-side state, so it is empty after a blueprint is saved.
 - The command refuses with a reason in the log (`no-selection`, `one-corner`, `too-large`, `unsafe-name`) instead of exporting an empty or oversized box.
-- The ordinary world and every Sable sub-level intersecting the selection each become their own OBJ object, positioned correctly even when the sub-level is rotated.
+- The ordinary world and every Sable sub-level intersecting the selection each become their own node holding that space's blocks and block entities, positioned correctly even when the sub-level is rotated. Sub-level geometry keeps correctly rotated normals.
 - Parts that Flywheel draws as instances (cannons, encased cogwheels, bearings and similar) are recovered by temporarily switching Flywheel to its CPU fallback during capture; if Flywheel is absent, nothing extra is needed.
-- Only blocks and block entities are exported (no entities), and OBJ carries no per-block tint, so grass, leaves and water come out untinted.
+- Only blocks and block entities are exported (no entities), fluids are not exported, and faces between touching blocks are not culled. Block tint (grass, leaves) is applied as vertex colour; a tint that cannot be resolved inside a sub-level's storage space leaves that quad white.
 - See `src/main/java/com/nebysse/minetomesh/sable/README-SABLE-EXPORT.md` for the full technical description and the log lines that explain each export.
 
 ## 0.5.1 hard migration warning
@@ -153,7 +156,7 @@ A directory with the same name automatically gets a suffix such as `name-2` or `
 
 In Blender 5.2 choose "File → Import → glTF 2.0" to open the `.gltf`; when you need to keep quads, choose "File → Import → Universal Scene Description" to open the `.usda`. Keep the relative layout of `.gltf`, `.bin`, `.usda` and `textures/` unchanged. The USDA stage is Y-Up with `metersPerUnit = 1`, and Blender performs the Y-up to Z-up axis rotation on import. How PreviewSurface renders Cutout, Blend, vertex tint and emission depends on the Blender USD importer, so complex materials should still be checked manually after import.
 
-Version 1.2.0 no longer generates OBJ/MTL for the standard export and offers no compatibility switch. No `.usdapart` temporary fragments should remain after a successful or cancelled export.
+Version 1.2.0 no longer generates OBJ/MTL for the standard export and offers no compatibility switch; the Sable region export writes the same glTF/USDA output instead of OBJ. No `.usdapart` temporary fragments should remain after a successful or cancelled export.
 
 Supported backends such as Flywheel 1.x temporarily enter a CPU fallback rendering scope during capture and are restored on the `finally` path. Objects generated purely by shaders with no CPU geometry cannot be recovered; they produce a translucent magenta bounding box and a diagnostic code is recorded. Shadows, fire, name text, Minecraft lighting and AO are not baked.
 

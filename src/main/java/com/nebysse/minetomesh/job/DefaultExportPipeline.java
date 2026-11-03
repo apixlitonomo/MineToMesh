@@ -80,7 +80,7 @@ public final class DefaultExportPipeline {
                 auxiliaryState).placeholder();
     }
 
-    static long warningCount(List<Diagnostic> diagnostics) {
+    public static long warningCount(List<Diagnostic> diagnostics) {
         return diagnostics.stream()
                 .filter(value -> value.severity() == Diagnostic.Severity.WARNING
                         || value.severity() == Diagnostic.Severity.FAILURE)
@@ -366,7 +366,12 @@ public final class DefaultExportPipeline {
         }
     }
 
-    private static Function<RenderTypeDescriptor, MaterialKey> resourceMaterialResolver(
+    /**
+     * Resolves a render type's texture through the resource, dynamic and GPU providers and
+     * registers the image. Shared with the Sable region export so both entry points name and
+     * write block-entity textures identically.
+     */
+    public static Function<RenderTypeDescriptor, MaterialKey> resourceMaterialResolver(
             Minecraft minecraft,
             TextureRegistry textures,
             List<Diagnostic> diagnostics) {
@@ -552,7 +557,7 @@ public final class DefaultExportPipeline {
         }
     }
 
-    private static void writeMaterialSidecars(
+    public static void writeMaterialSidecars(
             Path root,
             Set<MaterialKey> materials,
             TextureRegistry textures) throws IOException {
@@ -583,7 +588,7 @@ public final class DefaultExportPipeline {
         }
     }
 
-    private static List<String> validate(Path gltfPath) throws IOException {
+    public static List<String> validate(Path gltfPath) throws IOException {
         JsonObject document = JsonParser.parseString(
                 Files.readString(gltfPath, StandardCharsets.UTF_8)).getAsJsonObject();
         return InternalGltfValidator.validate(document, gltfPath.getParent());
