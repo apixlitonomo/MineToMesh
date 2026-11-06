@@ -3,9 +3,17 @@ package com.nebysse.minetomesh.world;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.EmptyLevelChunk;
+import net.minecraft.world.level.chunk.LevelChunk;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class WorldPlanner {
+    private static final Logger LOGGER = LoggerFactory.getLogger(WorldPlanner.class);
+
     public ExportPlan plan(ClientLevel level, Selection selection) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(selection, "selection");
@@ -29,9 +37,24 @@ public final class WorldPlanner {
         List<ExportPlan.SectionWork> sections = new ArrayList<>();
         List<ExportPlan.MissingChunk> missing = new ArrayList<>();
 
+        ChunkPos playerChunk = null;
+        Integer renderDistance = null;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                if (mc.player != null) {
+                    playerChunk = mc.player.chunkPosition();
+                }
+                if (mc.options != null && mc.options.renderDistance() != null) {
+                    renderDistance = mc.options.renderDistance().get();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
         for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                if (!level.hasChunk(chunkX, chunkZ)) {
+                if (!isChunkUsable(level, chunkX, chunkZ, playerChunk, renderDistance)) {
                     missing.add(new ExportPlan.MissingChunk(chunkX, chunkZ));
                     continue;
                 }
@@ -49,6 +72,41 @@ public final class WorldPlanner {
                 }
             }
         }
+
+        String playerPosStr = playerChunk != null ? ("[" + playerChunk.x + ", " + playerChunk.z + "]") : "unknown";
+        String rdStr = renderDistance != null ? String.valueOf(renderDistance) : "unknown";
+        LOGGER.info("Export plan created: sections={}, missingChunks={}, playerChunk={}, renderDistance={}",
+                sections.size(), missing.size(), playerPosStr, rdStr);
+
         return new ExportPlan(selection, sections, missing);
+    }
+
+    private static boolean isChunkUsable(
+            ClientLevel level,
+            int chunkX,
+            int chunkZ,
+            ChunkPos playerChunk,
+            Integer renderDistance) {
+        // Strict check: chunk must be currently loaded and non-empty in the client chunk source
+        LevelChunk chunk;
+        try {
+            chunk = level.getChunkSource().getChunk(chunkX, chunkZ, false);
+        } catch (Throwable t) {
+            return false;
+        }
+
+        if (chunk == null || chunk instanceof EmptyLevelChunk || chunk.isEmpty()) {
+            return false;
+        }
+
+        // Render distance heuristic: if player position and RD are known, chunks beyond RD are treated as missing
+        if (playerChunk != null && renderDistance != null) {
+            int chebyshev = Math.max(Math.abs(chunkX - playerChunk.x), Math.abs(chunkZ - playerChunk.z));
+            if (chebyshev > renderDistance) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

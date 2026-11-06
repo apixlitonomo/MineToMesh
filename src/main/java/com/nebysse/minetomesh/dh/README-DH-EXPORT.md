@@ -6,8 +6,8 @@ Like Sable compatibility, this integration is fully optional with no hard runtim
 
 ## Overview and Behavior
 
-1. **Vanilla loaded chunks remain authoritative**: Any chunk loaded on the client (`ClientLevel.hasChunk == true`) is exported with full vanilla block models, fluids, block entities, and entities.
-2. **Unloaded chunks fallback to LODs**: Any chunk in the selection that is not loaded on the client is queried against the Distant Horizons terrain data API (`IDhApiTerrainDataRepo.getAllTerrainDataAtChunkPos` / column query).
+1. **Vanilla loaded chunks remain authoritative**: Any chunk loaded on the client and strictly usable (`LevelChunk` non-null, non-empty, and within client render distance) is exported with full vanilla block models, fluids, block entities, and entities.
+2. **Unloaded or far chunks fallback to LODs**: Any chunk in the selection that is not loaded on the client, is empty, or lies outside the client render distance is classified as missing and queried against the Distant Horizons terrain data API (`IDhApiTerrainDataRepo.getAllTerrainDataAtChunkPos` / column query).
 3. **Approximation**: Vertical data point runs are converted into axis-aligned quad/box meshes with outward-facing normals and `[0, 1]` UVs. LOD meshes do not capture block entities, entities, fluids, or complex custom BakedModels.
 4. **Scene Hierarchy**: In glTF and USDA scenes, LOD geometry appears under a dedicated hierarchy node:
    - glTF: `DistantHorizons` -> `LodChunks` -> `c_<x>_<z>`
@@ -41,3 +41,4 @@ It can be disabled via the JVM system property:
 - **Fluids & Entities**: Distant Horizons LOD data does not include entity renderers or fluid animations.
 - **Biomes & Tint**: Block colors and biome tints are approximate, resolved via DH API's `getBlockColorPreApi` or material color palettes.
 - **Synchronous LOD Queries**: Currently terrain queries are executed synchronously before section iteration; large missing selections with lots of DH data will take time to decompress and mesh.
+- **Strict Chunk Checking**: WorldPlanner uses a strict chunk check (`ClientChunkCache.getChunk(x, z, false) != null` and not empty) plus a Chebyshev render distance boundary heuristic so empty or unloaded far chunks are properly routed to DH LOD fallback.
