@@ -56,6 +56,7 @@ public final class StreamingUsdaSession implements Closeable {
             openCategory(CapturedNode.Kind.CHUNK, "chunks");
             openCategory(CapturedNode.Kind.ENTITY, "entities");
             openCategory(CapturedNode.Kind.PLACEHOLDER, "placeholders");
+            openCategory(CapturedNode.Kind.DH_LOD, "dh-lods");
         } catch (IOException exception) {
             try {
                 close();
@@ -74,7 +75,7 @@ public final class StreamingUsdaSession implements Closeable {
                 case BLOCK_ENTITY -> appendGlobal(
                         node, blockMeshes, blockCurves, "block-entities");
                 case OVERLAY -> appendOverlay(node);
-                case CHUNK, ENTITY, PLACEHOLDER -> appendOrdinary(node);
+                case CHUNK, ENTITY, PLACEHOLDER, DH_LOD -> appendOrdinary(node);
             }
         }
     }
@@ -161,6 +162,7 @@ public final class StreamingUsdaSession implements Closeable {
                 writeCategory(out, "Placeholders",
                         categoryFragments.get(CapturedNode.Kind.PLACEHOLDER).path);
                 writeOverlays(out);
+                writeDhLods(out);
                 writeMaterials(out);
                 out.write("}\n");
             }
@@ -210,6 +212,17 @@ public final class StreamingUsdaSession implements Closeable {
             nodeCount = Math.addExact(nodeCount, 1L);
         }
         out.write("    }\n");
+    }
+
+    private void writeDhLods(BufferedWriter out) throws IOException {
+        Path fragment = categoryFragments.get(CapturedNode.Kind.DH_LOD).path;
+        if (Files.exists(fragment) && Files.size(fragment) > 0) {
+            out.write("    def Xform \"DistantHorizons\"\n    {\n");
+            out.write("        def Xform \"LodChunks\"\n        {\n");
+            copy(fragment, out);
+            out.write("        }\n");
+            out.write("    }\n");
+        }
     }
 
     private void writeOverlays(BufferedWriter out) throws IOException {

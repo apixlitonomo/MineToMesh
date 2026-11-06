@@ -1,6 +1,7 @@
 package com.nebysse.minetomesh.report;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -66,6 +67,40 @@ class ReportWriterTest {
         assertEquals("z", diagnostics.get(1).getAsJsonObject().get("objectId").getAsString());
         assertEquals("Z_CODE", diagnostics.get(2).getAsJsonObject().get("code").getAsString());
         assertEquals(12L, json.getAsJsonObject("timingsMillis").get("capture").getAsLong());
+    }
+
+    @Test
+    void writesDistantHorizonsStatsWhenPresent() throws Exception {
+        ExportReport report = new ExportReport(
+                "completed",
+                "rolling",
+                "minecraft:overworld",
+                new int[] {0, 64, 0},
+                new int[] {15, 79, 15},
+                new int[] {0, 64, 0},
+                4096L,
+                100L,
+                120L,
+                new BatchCounters(4096, 10, 2, 1, 3, 4, 5, 6, 1),
+                new GeometryAdjustmentStats(0, 0, 0, Map.of()),
+                List.of(),
+                List.of(),
+                Map.of(),
+                new ExportReport.DhStats(true, "7.2.0", 4, 3, 1,
+                        "LOD geometry is approximate and generated from Distant Horizons terrain data"));
+
+        Path output = ReportWriter.write(tempDir, report);
+        JsonObject json = JsonParser.parseString(Files.readString(output)).getAsJsonObject();
+
+        assertTrue(json.has("distantHorizons"));
+        JsonObject dh = json.getAsJsonObject("distantHorizons");
+        assertTrue(dh.get("present").getAsBoolean());
+        assertEquals("7.2.0", dh.get("apiVersion").getAsString());
+        assertEquals(4, dh.get("lodChunksAttempted").getAsInt());
+        assertEquals(3, dh.get("lodChunksFilled").getAsInt());
+        assertEquals(1, dh.get("lodChunksFailed").getAsInt());
+        assertEquals("LOD geometry is approximate and generated from Distant Horizons terrain data",
+                dh.get("note").getAsString());
     }
 
     private static Diagnostic diagnostic(String code, String object, int x) {

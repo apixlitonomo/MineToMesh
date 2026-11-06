@@ -19,6 +19,7 @@ MineToMesh is a world-export mod for Minecraft 1.21.1 on NeoForge. It writes the
 - Coordinates use the minimum corner of the selection as the local origin, and one block equals one Blender meter. The export space keeps Minecraft's relative `(X,Y,Z)` orientation and performs no axis reflection.
 - After Blender imports the glTF it rotates from Y-up to Z-up: Minecraft `+X` → Blender `+X`, Minecraft `+Y` → Blender `+Z`, Minecraft `+Z` → Blender `-Y`.
 - Unloaded chunks are never force-loaded; diagnostics are written to `report.json`.
+- When Distant Horizons is present, unloaded chunks can optionally be filled from Distant Horizons LOD terrain data under `DistantHorizons/LodChunks/c_x_z`.
 
 ## Installation
 
@@ -115,6 +116,17 @@ Notes:
 - Parts that Flywheel draws as instances (cannons, encased cogwheels, bearings and similar) are recovered by temporarily switching Flywheel to its CPU fallback during capture; if Flywheel is absent, nothing extra is needed.
 - Only blocks and block entities are exported (no entities), fluids are not exported, and faces between touching blocks are not culled. Block tint (grass, leaves) is applied as vertex colour; a tint that cannot be resolved inside a sub-level's storage space leaves that quad white.
 - See `src/main/java/com/nebysse/minetomesh/sable/README-SABLE-EXPORT.md` for the full technical description and the log lines that explain each export.
+
+## Distant Horizons LOD fallback
+
+When [Distant Horizons](https://gitlab.com/distant-horizons-team/distant-horizons) is present on the client, unloaded chunks inside an export selection are optionally filled from Distant Horizons LOD terrain data instead of being skipped. The integration has no hard runtime dependency (MineToMesh works identically without DH).
+
+- Loaded chunks remain authoritative and keep full vanilla BakedModels, block entities, fluids, and entities.
+- Unloaded chunks with available DH LOD data are meshed as simplified vertical run boxes/quads under `DistantHorizons/LodChunks/c_x_z`.
+- Unexplored or ungenerated chunks without DH data remain recorded as missing chunks in `report.json`.
+- `report.json` records `distantHorizons.present`, `apiVersion`, `lodChunksAttempted`, `lodChunksFilled`, `lodChunksFailed`, and an approximation notice.
+- Defaults to enabled when DH is present; disable with `-Dminetomesh.dh.fallback=false`.
+- See `src/main/java/com/nebysse/minetomesh/dh/README-DH-EXPORT.md` for full technical documentation.
 
 ## 0.5.1 hard migration warning
 

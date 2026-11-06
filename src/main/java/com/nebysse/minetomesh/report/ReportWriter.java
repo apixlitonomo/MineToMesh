@@ -78,6 +78,22 @@ public final class ReportWriter {
         JsonObject timings = new JsonObject();
         report.timingsMillis().forEach(timings::addProperty);
         json.add("timingsMillis", timings);
+
+        if (report.distantHorizons() != null) {
+            JsonObject dh = new JsonObject();
+            dh.addProperty("present", report.distantHorizons().present());
+            if (report.distantHorizons().apiVersion() != null) {
+                dh.addProperty("apiVersion", report.distantHorizons().apiVersion());
+            } else {
+                dh.add("apiVersion", JsonNull.INSTANCE);
+            }
+            dh.addProperty("lodChunksAttempted", report.distantHorizons().lodChunksAttempted());
+            dh.addProperty("lodChunksFilled", report.distantHorizons().lodChunksFilled());
+            dh.addProperty("lodChunksFailed", report.distantHorizons().lodChunksFailed());
+            dh.addProperty("note", report.distantHorizons().note());
+            json.add("distantHorizons", dh);
+        }
+
         return json;
     }
 

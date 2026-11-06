@@ -26,6 +26,8 @@ class DocumentationPolicyTest {
                 "actual atlas UVs",
                 "selection/grass_side_overlay",
                 "Overlays",
+                "Distant Horizons",
+                "LodChunks",
                 "Unicode",
                 "/minetomesh",
                 "com.nebysse.minetomesh",
