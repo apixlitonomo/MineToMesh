@@ -40,6 +40,8 @@ public final class GltfDocumentBuilder {
     private final Map<String, MergedNode> overlayNodes = new LinkedHashMap<>();
     private final Map<MaterialKey, MergedNode> blockEntityMaterialNodes =
             new LinkedHashMap<>();
+    private Integer dhRootNodeIndex;
+    private Integer dhLodChunksNodeIndex;
     private boolean finished;
 
     public GltfDocumentBuilder(String bufferUri, Map<String, Object> rootExtras) {
@@ -94,6 +96,28 @@ public final class GltfDocumentBuilder {
         int meshIndex = addMesh(capturedNode.name(), primitives(written));
         addCapturedNode(capturedNode, meshIndex);
         return 1;
+    }
+
+    private int getOrCreateDhLodChunksNode() {
+        if (dhLodChunksNodeIndex != null) {
+            return dhLodChunksNodeIndex;
+        }
+        JsonObject dhRoot = new JsonObject();
+        dhRoot.addProperty("name", "DistantHorizons");
+        dhRoot.add("children", new JsonArray());
+        int rootIndex = nodes.size();
+        nodes.add(dhRoot);
+        dhRootNodeIndex = rootIndex;
+
+        JsonObject lodChunks = new JsonObject();
+        lodChunks.addProperty("name", "LodChunks");
+        lodChunks.add("children", new JsonArray());
+        int lodChunksIndex = nodes.size();
+        nodes.add(lodChunks);
+
+        dhRoot.getAsJsonArray("children").add(lodChunksIndex);
+        dhLodChunksNodeIndex = lodChunksIndex;
+        return dhLodChunksNodeIndex;
     }
 
     private int addBlockEntityPrimitives(List<WrittenPrimitive> written) {
@@ -154,7 +178,12 @@ public final class GltfDocumentBuilder {
         }
         int nodeIndex = nodes.size();
         nodes.add(node);
-        hierarchyRoot(capturedNode.kind()).getAsJsonArray("children").add(nodeIndex);
+        if (capturedNode.kind() == CapturedNode.Kind.DH_LOD) {
+            int lodChunksIndex = getOrCreateDhLodChunksNode();
+            nodes.get(lodChunksIndex).getAsJsonObject().getAsJsonArray("children").add(nodeIndex);
+        } else {
+            hierarchyRoot(capturedNode.kind()).getAsJsonArray("children").add(nodeIndex);
+        }
         return nodeIndex;
     }
 
@@ -180,6 +209,9 @@ public final class GltfDocumentBuilder {
         rootNodes.add(ENTITIES_ROOT);
         rootNodes.add(PLACEHOLDERS_ROOT);
         rootNodes.add(OVERLAYS_ROOT);
+        if (dhRootNodeIndex != null) {
+            rootNodes.add(dhRootNodeIndex);
+        }
         scene.add("nodes", rootNodes);
         JsonArray scenes = new JsonArray();
         scenes.add(scene);
@@ -338,6 +370,7 @@ public final class GltfDocumentBuilder {
             case ENTITY -> ENTITIES_ROOT;
             case PLACEHOLDER -> PLACEHOLDERS_ROOT;
             case OVERLAY -> OVERLAYS_ROOT;
+            case DH_LOD -> throw new IllegalArgumentException("DH_LOD uses custom hierarchy under DistantHorizons/LodChunks");
         }).getAsJsonObject();
     }
 

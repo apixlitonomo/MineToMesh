@@ -120,13 +120,21 @@ public final class DefaultExportPipeline {
         try {
             TextureRegistry textures = new TextureRegistry();
             textures.register(PlaceholderFactory.TEXTURE, PlaceholderFactory.textureImage());
+
+            DhPipelineHelper.DhLodResult dhLodResult = DhPipelineHelper.captureLodChunks(
+                    level, selection, plan.missingChunks(), textures);
+
+            List<ExportPlan.MissingChunk> remainingMissing = dhLodResult.remainingMissing();
+
             ProductionCaptureSource source = new ProductionCaptureSource(
-                    minecraft, level, plan, textures, options);
+                    minecraft, level, plan, textures, options, dhLodResult.lodBatches());
             AsyncBatchSink sink = new AsyncBatchSink(
                     transaction,
                     textures,
                     name,
                     plan,
+                    remainingMissing,
+                    dhLodResult.reportStats(),
                     rootExtras(minecraft, plan, options),
                     level.getGameTime(),
                     telemetry);
@@ -188,17 +196,20 @@ public final class DefaultExportPipeline {
         private final BlockEntityCapture blockEntities;
         private final EntityCapture entities;
         private final List<Diagnostic> materialDiagnostics = new ArrayList<>();
+        private final List<ChunkBatch> dhLodBatches;
 
         private ProductionCaptureSource(
                 Minecraft minecraft,
                 ClientLevel level,
                 ExportPlan plan,
                 TextureRegistry textures,
-                ExportOptions options) {
+                ExportOptions options,
+                List<ChunkBatch> dhLodBatches) {
             this.level = level;
             this.plan = plan;
             this.textures = textures;
             this.options = options;
+            this.dhLodBatches = List.copyOf(dhLodBatches);
             SpriteTextureExtractor sprites = new SpriteTextureExtractor(minecraft.getResourceManager());
             AtlasSpriteResolver atlasSprites = new AtlasSpriteResolver(
                     atlasId -> minecraft.getModelManager().getAtlas(atlasId));
@@ -214,9 +225,18 @@ public final class DefaultExportPipeline {
         public ChunkBatch captureEntities() {
             EntityCapture.CaptureResult captured = entities.captureAll(
                     level, plan.selection(), options.includePlayers());
+            List<CapturedNode> nodes = new ArrayList<>(captured.nodes());
             List<Diagnostic> diagnostics = new ArrayList<>(captured.diagnostics());
+            BatchCounters counters = captured.counters();
+
+            for (ChunkBatch lodBatch : dhLodBatches) {
+                nodes.addAll(lodBatch.nodes());
+                diagnostics.addAll(lodBatch.diagnostics());
+                counters = counters.plus(lodBatch.counters());
+            }
+
             diagnostics.addAll(drainMaterialDiagnostics());
-            return new ChunkBatch(captured.nodes(), diagnostics, captured.counters());
+            return new ChunkBatch(nodes, diagnostics, counters);
         }
 
         @Override
@@ -414,6 +434,8 @@ public final class DefaultExportPipeline {
                 TextureRegistry textures,
                 ExportName name,
                 ExportPlan plan,
+                List<ExportPlan.MissingChunk> remainingMissing,
+                ExportReport.DhStats dhStats,
                 Map<String, Object> rootExtras,
                 long startGameTime,
                 ExportTelemetry telemetry) {
@@ -421,7 +443,7 @@ public final class DefaultExportPipeline {
             this.telemetry = Objects.requireNonNull(telemetry, "telemetry");
             Thread writer = new Thread(
                     () -> writeLoop(transaction, textures, name, plan,
-                            rootExtras, startGameTime),
+                            remainingMissing, dhStats, rootExtras, startGameTime),
                     "minetomesh-writer-" + name.value());
             writer.setDaemon(true);
             writer.start();
@@ -467,6 +489,8 @@ public final class DefaultExportPipeline {
                 TextureRegistry textures,
                 ExportName name,
                 ExportPlan plan,
+                List<ExportPlan.MissingChunk> remainingMissing,
+                ExportReport.DhStats dhStats,
                 Map<String, Object> rootExtras,
                 long startGameTime) {
             List<Diagnostic> diagnostics = new ArrayList<>();
@@ -521,7 +545,7 @@ public final class DefaultExportPipeline {
                         : warnings == 0 ? "completed" : "completed_with_warnings";
                 telemetry.writerStage(ExportTelemetry.WriterStage.REPORT);
                 ReportWriter.write(transaction.temporaryDirectory(), report(
-                        status, plan, startGameTime, endGameTime,
+                        status, plan, remainingMissing, dhStats, startGameTime, endGameTime,
                         finalCounters, adjustments, diagnostics));
                 if (fatal) {
                     result.set(ExportJob.WriterResult.failure(
@@ -613,6 +637,8 @@ public final class DefaultExportPipeline {
     private static ExportReport report(
             String status,
             ExportPlan plan,
+            List<ExportPlan.MissingChunk> remainingMissing,
+            ExportReport.DhStats dhStats,
             long startGameTime,
             long endGameTime,
             BatchCounters counters,
@@ -631,11 +657,12 @@ public final class DefaultExportPipeline {
                 endGameTime,
                 counters,
                 adjustments,
-                plan.missingChunks().stream()
+                remainingMissing.stream()
                         .map(chunk -> new ExportReport.MissingChunk(chunk.chunkX(), chunk.chunkZ()))
                         .toList(),
                 diagnostics,
-                Map.of());
+                Map.of(),
+                dhStats);
     }
 
     private record Envelope(

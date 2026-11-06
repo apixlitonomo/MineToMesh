@@ -25,7 +25,10 @@ class MineToMeshMetadataTest {
         assertTrue(metadata.contains("version=\"1.2.0\""));
         assertTrue(metadata.contains("authors=\"岚苍穹 nebysse\""));
         assertFalse(metadata.contains("authors=\"OneCuber\""));
-        assertFalse(metadata.contains("side=\"CLIENT\""));
+        assertTrue(metadata.contains("modId=\"neoforge\"\nside=\"BOTH\"")
+                || metadata.contains("modId=\"neoforge\"\r\nside=\"BOTH\"")
+                || (metadata.contains("modId=\"neoforge\"") && metadata.contains("side=\"BOTH\"")));
+        assertTrue(metadata.contains("modId=\"distanthorizons\""));
         assertTrue(metadata.contains("item-owned export wand"));
     }
 }

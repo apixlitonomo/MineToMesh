@@ -23,7 +23,28 @@ public record ExportReport(
         GeometryAdjustmentStats geometryAdjustments,
         List<MissingChunk> missingChunks,
         List<Diagnostic> diagnostics,
-        Map<String, Long> timingsMillis) {
+        Map<String, Long> timingsMillis,
+        DhStats distantHorizons) {
+    public ExportReport(
+            String status,
+            String snapshotMode,
+            String dimension,
+            int[] min,
+            int[] max,
+            int[] origin,
+            long volume,
+            long startGameTime,
+            long endGameTime,
+            BatchCounters counters,
+            GeometryAdjustmentStats geometryAdjustments,
+            List<MissingChunk> missingChunks,
+            List<Diagnostic> diagnostics,
+            Map<String, Long> timingsMillis) {
+        this(status, snapshotMode, dimension, min, max, origin, volume,
+                startGameTime, endGameTime, counters, geometryAdjustments,
+                missingChunks, diagnostics, timingsMillis, null);
+    }
+
     public ExportReport {
         Objects.requireNonNull(status, "status");
         Objects.requireNonNull(snapshotMode, "snapshotMode");
@@ -74,5 +95,14 @@ public record ExportReport(
             int x = Integer.compare(chunkX, other.chunkX);
             return x != 0 ? x : Integer.compare(chunkZ, other.chunkZ);
         }
+    }
+
+    public record DhStats(
+            boolean present,
+            String apiVersion,
+            int lodChunksAttempted,
+            int lodChunksFilled,
+            int lodChunksFailed,
+            String note) {
     }
 }

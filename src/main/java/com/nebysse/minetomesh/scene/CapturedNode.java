@@ -23,6 +23,7 @@ public record CapturedNode(
         BLOCK_ENTITY,
         ENTITY,
         PLACEHOLDER,
-        OVERLAY
+        OVERLAY,
+        DH_LOD
     }
 }
