@@ -69,14 +69,22 @@ public final class DhLodMesher {
 
                 for (DhApiTerrainDataPoint dp : column) {
                     if (dp == null) continue;
-                    IDhApiBlockStateWrapper blockState = dp.blockStateWrapper;
-                    if (blockState != null && blockState.isAir()) {
-                        continue;
+
+                    IDhApiBlockStateWrapper blockState = null;
+                    try {
+                        blockState = dp.blockStateWrapper;
+                        if (blockState != null && blockState.isAir()) {
+                            continue;
+                        }
+                    } catch (Throwable ignored) {
                     }
 
                     int width = 1;
-                    if (dp.detailLevel > 0) {
-                        width = 1 << dp.detailLevel;
+                    try {
+                        if (dp.detailLevel > 0 && dp.detailLevel <= 9) {
+                            width = 1 << dp.detailLevel;
+                        }
+                    } catch (Throwable ignored) {
                     }
 
                     int worldBlockMinX = chunkBaseX + relX;
@@ -84,14 +92,19 @@ public final class DhLodMesher {
                     int worldBlockMinZ = chunkBaseZ + relZ;
                     int worldBlockMaxZ = worldBlockMinZ + width - 1;
 
-                    // Compute vertical range.
-                    // DH JavaDoc: "An unsigned block position of the bottom vertex for this LOD relative to the level's minimum height. Should be >= 0."
-                    int worldYBottom = levelMinHeight + dp.bottomYBlockPos;
-                    int worldYTop = levelMinHeight + dp.topYBlockPos;
-                    if (worldYTop < worldYBottom) {
-                        int temp = worldYBottom;
-                        worldYBottom = worldYTop;
-                        worldYTop = temp;
+                    // Compute vertical range safely
+                    int worldYBottom;
+                    int worldYTop;
+                    try {
+                        worldYBottom = levelMinHeight + dp.bottomYBlockPos;
+                        worldYTop = levelMinHeight + dp.topYBlockPos;
+                        if (worldYTop < worldYBottom) {
+                            int temp = worldYBottom;
+                            worldYBottom = worldYTop;
+                            worldYTop = temp;
+                        }
+                    } catch (Throwable ignored) {
+                        continue;
                     }
 
                     // Clip against selection bounds
@@ -107,7 +120,6 @@ public final class DhLodMesher {
                     }
 
                     // Convert to local coordinates relative to selection min
-                    // One block is 1 unit. Top/Max faces are at max + 1.0f
                     float x0 = (float) (clippedMinX - selMinX);
                     float x1 = (float) (clippedMaxX - selMinX + 1);
                     float y0 = (float) (clippedMinY - selMinY);
@@ -115,13 +127,20 @@ public final class DhLodMesher {
                     float z0 = (float) (clippedMinZ - selMinZ);
                     float z1 = (float) (clippedMaxZ - selMinZ + 1);
 
-                    MaterialKey material = DhMaterialResolver.resolveMaterial(blockState);
-                    IDhApiBiomeWrapper biome = dp.biomeWrapper;
-                    ColorRgba tint = DhMaterialResolver.resolveColor(
-                            levelWrapper, blockState, biome, clippedMinX, clippedMinY, clippedMinZ);
+                    try {
+                        MaterialKey material = DhMaterialResolver.resolveMaterial(blockState);
+                        IDhApiBiomeWrapper biome = null;
+                        try {
+                            biome = dp.biomeWrapper;
+                        } catch (Throwable ignored) {
+                        }
+                        ColorRgba tint = DhMaterialResolver.resolveColor(
+                                levelWrapper, blockState, biome, clippedMinX, clippedMinY, clippedMinZ);
 
-                    List<Vertex> boxVertices = createBoxQuads(x0, y0, z0, x1, y1, z1, tint);
-                    accumulator.append(material, PrimitiveMode.QUADS, boxVertices);
+                        List<Vertex> boxVertices = createBoxQuads(x0, y0, z0, x1, y1, z1, tint);
+                        accumulator.append(material, PrimitiveMode.QUADS, boxVertices);
+                    } catch (Throwable ignored) {
+                    }
                 }
             }
         }

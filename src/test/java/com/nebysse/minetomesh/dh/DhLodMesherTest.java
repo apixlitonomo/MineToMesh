@@ -130,4 +130,26 @@ class DhLodMesherTest {
         assertNotNull(dirtMat);
         assertTrue(dirtMat.texture().sourceId().contains("minecraft_dirt"));
     }
+
+    @Test
+    void nullWrappersAndInvertedYBoundsDoNotThrow() {
+        Selection selection = new Selection(
+                new BlockPoint("minecraft:overworld", 0, 0, 0),
+                new BlockPoint("minecraft:overworld", 15, 63, 15));
+
+        // Datapoint with null blockState and null biome, and inverted Y (bottom=30, top=10)
+        DhApiTerrainDataPoint dp = DhApiTerrainDataPoint.create(
+                (byte) 0, 15, 15, 30, 10, null, null);
+
+        DhApiTerrainDataPoint[][][] chunkData = new DhApiTerrainDataPoint[16][16][];
+        chunkData[0][0] = new DhApiTerrainDataPoint[] { dp };
+
+        PrimitiveAccumulator accumulator = new PrimitiveAccumulator("test_dh_null_wrappers");
+        DhLodMesher.meshChunk(null, 0, 0, chunkData, selection, 0, accumulator);
+
+        PrimitiveAccumulator.SealResult sealed = accumulator.seal();
+        assertFalse(sealed.primitives().isEmpty(), "Expected meshed box even with null wrappers");
+        assertEquals(1, sealed.primitives().size());
+        assertEquals(DhMaterialResolver.GENERIC_LOD_MATERIAL, sealed.primitives().get(0).material());
+    }
 }

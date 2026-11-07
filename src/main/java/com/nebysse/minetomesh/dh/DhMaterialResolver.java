@@ -52,42 +52,46 @@ public final class DhMaterialResolver {
             return GENERIC_LOD_MATERIAL;
         }
 
-        String label = null;
         try {
-            label = blockState.getSerialString();
-        } catch (Throwable ignored) {
-        }
-
-        if (label == null || label.isBlank()) {
+            String label = null;
             try {
-                byte matId = blockState.getMaterialId();
-                EDhApiBlockMaterial mat = EDhApiBlockMaterial.getFromIndex(matId);
-                if (mat != null) {
-                    label = "dh_mat_" + mat.name().toLowerCase();
-                }
+                label = blockState.getSerialString();
             } catch (Throwable ignored) {
             }
-        }
 
-        if (label == null || label.isBlank()) {
+            if (label == null || label.isBlank()) {
+                try {
+                    byte matId = blockState.getMaterialId();
+                    EDhApiBlockMaterial mat = EDhApiBlockMaterial.getFromIndex(matId);
+                    if (mat != null) {
+                        label = "dh_mat_" + mat.name().toLowerCase();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+
+            if (label == null || label.isBlank()) {
+                return GENERIC_LOD_MATERIAL;
+            }
+
+            String sanitized = sanitize(label);
+            return MATERIAL_CACHE.computeIfAbsent(sanitized, key -> {
+                TextureKey texture = new TextureKey(
+                        TextureKey.Kind.DYNAMIC,
+                        "minetomesh:dh_lod_" + key,
+                        "textures/minetomesh/generated/dh_lod_" + key + ".png");
+                return new MaterialKey(
+                        texture,
+                        MaterialKey.AlphaMode.OPAQUE,
+                        Optional.empty(),
+                        false,
+                        false,
+                        MaterialKey.BlendSemantic.STANDARD,
+                        MaterialKey.SamplerMode.NEAREST);
+            });
+        } catch (Throwable ignored) {
             return GENERIC_LOD_MATERIAL;
         }
-
-        String sanitized = sanitize(label);
-        return MATERIAL_CACHE.computeIfAbsent(sanitized, key -> {
-            TextureKey texture = new TextureKey(
-                    TextureKey.Kind.DYNAMIC,
-                    "minetomesh:dh_lod_" + key,
-                    "textures/minetomesh/generated/dh_lod_" + key + ".png");
-            return new MaterialKey(
-                    texture,
-                    MaterialKey.AlphaMode.OPAQUE,
-                    Optional.empty(),
-                    false,
-                    false,
-                    MaterialKey.BlendSemantic.STANDARD,
-                    MaterialKey.SamplerMode.NEAREST);
-        });
     }
 
     public static ColorRgba resolveColor(
@@ -97,41 +101,44 @@ public final class DhMaterialResolver {
             int worldX,
             int worldY,
             int worldZ) {
-        if (level != null && blockState != null) {
-            try {
-                DhApiResult<Color> colorResult = level.getBlockColorPreApi(
-                        blockState, biome, worldX, worldY, worldZ, null);
-                if (colorResult != null && colorResult.success && colorResult.payload != null) {
-                    Color c = colorResult.payload;
-                    return new ColorRgba(c.getRed(), c.getGreen(), c.getBlue(), 255);
+        try {
+            if (level != null && blockState != null) {
+                try {
+                    DhApiResult<Color> colorResult = level.getBlockColorPreApi(
+                            blockState, biome, worldX, worldY, worldZ, null);
+                    if (colorResult != null && colorResult.success && colorResult.payload != null) {
+                        Color c = colorResult.payload;
+                        return new ColorRgba(c.getRed(), c.getGreen(), c.getBlue(), 255);
+                    }
+                } catch (Throwable ignored) {
                 }
-            } catch (Throwable ignored) {
             }
-        }
 
-        // Fallback colors based on material enum if available
-        if (blockState != null) {
-            try {
-                byte matId = blockState.getMaterialId();
-                EDhApiBlockMaterial mat = EDhApiBlockMaterial.getFromIndex(matId);
-                if (mat != null) {
-                    return switch (mat) {
-                        case GRASS -> new ColorRgba(120, 178, 86, 255);
-                        case LEAVES -> new ColorRgba(89, 140, 62, 255);
-                        case DIRT -> new ColorRgba(134, 96, 67, 255);
-                        case STONE, DEEPSLATE -> new ColorRgba(125, 125, 125, 255);
-                        case WOOD -> new ColorRgba(150, 116, 65, 255);
-                        case WATER -> new ColorRgba(63, 118, 228, 255);
-                        case LAVA -> new ColorRgba(211, 91, 19, 255);
-                        case SAND -> new ColorRgba(219, 211, 160, 255);
-                        case SNOW -> new ColorRgba(240, 245, 245, 255);
-                        case NETHER_STONE -> new ColorRgba(115, 41, 41, 255);
-                        case TERRACOTTA -> new ColorRgba(152, 94, 67, 255);
-                        default -> ColorRgba.WHITE;
-                    };
+            // Fallback colors based on material enum if available
+            if (blockState != null) {
+                try {
+                    byte matId = blockState.getMaterialId();
+                    EDhApiBlockMaterial mat = EDhApiBlockMaterial.getFromIndex(matId);
+                    if (mat != null) {
+                        return switch (mat) {
+                            case GRASS -> new ColorRgba(120, 178, 86, 255);
+                            case LEAVES -> new ColorRgba(89, 140, 62, 255);
+                            case DIRT -> new ColorRgba(134, 96, 67, 255);
+                            case STONE, DEEPSLATE -> new ColorRgba(125, 125, 125, 255);
+                            case WOOD -> new ColorRgba(150, 116, 65, 255);
+                            case WATER -> new ColorRgba(63, 118, 228, 255);
+                            case LAVA -> new ColorRgba(211, 91, 19, 255);
+                            case SAND -> new ColorRgba(219, 211, 160, 255);
+                            case SNOW -> new ColorRgba(240, 245, 245, 255);
+                            case NETHER_STONE -> new ColorRgba(115, 41, 41, 255);
+                            case TERRACOTTA -> new ColorRgba(152, 94, 67, 255);
+                            default -> ColorRgba.WHITE;
+                        };
+                    }
+                } catch (Throwable ignored) {
                 }
-            } catch (Throwable ignored) {
             }
+        } catch (Throwable ignored) {
         }
 
         return ColorRgba.WHITE;

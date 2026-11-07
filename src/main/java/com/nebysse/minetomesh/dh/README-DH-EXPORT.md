@@ -40,5 +40,6 @@ It can be disabled via the JVM system property:
 - **Approximate Geometry**: Vertical columns are converted to axis-aligned boxes. Micro-details, complex geometry, non-cubic blocks (stairs, slabs, fences), and dynamic renderers are not represented in LOD fallback.
 - **Fluids & Entities**: Distant Horizons LOD data does not include entity renderers or fluid animations.
 - **Biomes & Tint**: Block colors and biome tints are approximate, resolved via DH API's `getBlockColorPreApi` or material color palettes.
-- **Synchronous LOD Queries**: Currently terrain queries are executed synchronously before section iteration; large missing selections with lots of DH data will take time to decompress and mesh.
+- **Synchronous LOD Queries & Budgeting**: Terrain queries are executed synchronously with a 500ms render-thread time budget. Any chunks unattempted when the budget expires remain in `missingChunks` to avoid hanging the client.
+- **Fault Tolerance**: LOD meshing is best-effort; individual chunk failures or null/invalid data points (e.g. null biome wrappers) are isolated without aborting the export.
 - **Strict Chunk Checking**: WorldPlanner uses a strict chunk check (`ClientChunkCache.getChunk(x, z, false) != null` and not empty) plus a Chebyshev render distance boundary heuristic so empty or unloaded far chunks are properly routed to DH LOD fallback.

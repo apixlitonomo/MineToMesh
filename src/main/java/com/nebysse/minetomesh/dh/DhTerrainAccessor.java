@@ -67,58 +67,12 @@ public final class DhTerrainAccessor implements Closeable {
             if (result != null && result.success && result.payload != null) {
                 return Optional.of(result.payload);
             }
-
-            // Fallback: query column by column if chunk-level query was unsuccessful
-            DhApiTerrainDataPoint[][][] fallback = queryColumnsForChunk(repo, chunkPosX, chunkPosZ);
-            if (fallback != null) {
-                return Optional.of(fallback);
-            }
         } catch (Throwable throwable) {
             LOGGER.debug("Error querying DH terrain data for chunk {}, {}: {}",
                     chunkPosX, chunkPosZ, throwable.getMessage());
         }
 
         return Optional.empty();
-    }
-
-    private DhApiTerrainDataPoint[][][] queryColumnsForChunk(
-            IDhApiTerrainDataRepo repo, int chunkPosX, int chunkPosZ) {
-        int baseBlockX = chunkPosX << 4;
-        int baseBlockZ = chunkPosZ << 4;
-        DhApiTerrainDataPoint[][][] chunkData = new DhApiTerrainDataPoint[16][16][];
-        boolean hasAnyData = false;
-
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                try {
-                    DhApiResult<DhApiTerrainDataPoint[]> colResult = null;
-                    try {
-                        colResult = repo.getColumnDataAtBlockPos(levelWrapper, baseBlockX + x, baseBlockZ + z, cache);
-                    } catch (NoSuchMethodError | Exception e) {
-                        try {
-                            java.lang.reflect.Method m = repo.getClass().getMethod(
-                                    "getColumnDataAtBlockPos", IDhApiLevelWrapper.class, int.class, int.class);
-                            @SuppressWarnings("unchecked")
-                            DhApiResult<DhApiTerrainDataPoint[]> res =
-                                    (DhApiResult<DhApiTerrainDataPoint[]>) m.invoke(repo, levelWrapper, baseBlockX + x, baseBlockZ + z);
-                            colResult = res;
-                        } catch (Throwable ignored) {
-                        }
-                    }
-
-                    if (colResult != null && colResult.success && colResult.payload != null && colResult.payload.length > 0) {
-                        chunkData[x][z] = colResult.payload;
-                        hasAnyData = true;
-                    } else {
-                        chunkData[x][z] = new DhApiTerrainDataPoint[0];
-                    }
-                } catch (Throwable ignored) {
-                    chunkData[x][z] = new DhApiTerrainDataPoint[0];
-                }
-            }
-        }
-
-        return hasAnyData ? chunkData : null;
     }
 
     @Override
